@@ -1,0 +1,19 @@
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_jwt_secret: str = ""
+    kakao_rest_api_key: str = ""
+    cors_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    class Config:
+        env_file = ".env"
+
+
+settings = Settings()

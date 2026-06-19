@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafbfc;
+  --foreground: #1e293b;
+  --card: #ffffff;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --accent: #14b8a6;
+  --accent-light: #5eead4;
+  --warm: #f97316;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --surface: #f1f5f9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-warm: var(--warm);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-surface: var(--surface);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.gradient-hero {
+  background: linear-gradient(135deg, #eef2ff 0%, #f0fdfa 50%, #fff7ed 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.tier-bronze { color: #b45309; background: #fef3c7; }
+.tier-silver { color: #475569; background: #e2e8f0; }
+.tier-gold { color: #ca8a04; background: #fef9c3; }
+.tier-platinum { color: #7c3aed; background: #ede9fe; }
