@@ -46,6 +46,7 @@ export const MOCK_APPOINTMENTS = [
     status: "confirmed" as const,
     confirmed_date: "2026-06-28",
     confirmed_time: "18:00:00",
+    confirmed_place_id: "demo-place-1",
     created_at: "2026-06-12T09:00:00Z",
   },
 ];
@@ -108,6 +109,8 @@ export const MOCK_PROFILE = {
   display_name: "데모 사용자",
   age_group: "TWENTIES" as const,
   residence: "서울 강남구",
+  home_lat: 37.4979,
+  home_lng: 127.0276,
   trust_score: 35,
   badge_tier: "SILVER" as const,
   role: "USER" as const,

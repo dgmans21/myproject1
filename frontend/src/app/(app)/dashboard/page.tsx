@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/Navbar";
+import { DashboardOutputs } from "@/components/DashboardOutputs";
 import { Sparkles, Users, MapPin, Calendar } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import Link from "next/link";
@@ -34,7 +35,7 @@ export default function DashboardPage() {
             </Card>
           </Link>
 
-          <Link href="/places">
+          <Link href="/places/map">
             <Card hover className="h-full">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-warm">
                 <MapPin className="h-5 w-5" />
@@ -54,6 +55,8 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
+
+        <DashboardOutputs />
 
         <div className="mt-8 gradient-card rounded-2xl border border-border p-8">
           <h2 className="text-lg font-semibold text-foreground">빠른 시작 가이드</h2>

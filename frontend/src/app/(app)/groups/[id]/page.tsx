@@ -8,6 +8,7 @@ import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
+import { RoomOutputBanner } from "@/components/RoomOutputBanner";
 import { api, Appointment, Room, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { Plus, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -73,6 +74,8 @@ export default function GroupDetailPage() {
             </Button>
           </div>
         )}
+
+        <RoomOutputBanner roomId={id!} appointments={appointments} />
 
         <Card className="mt-6">
           <CardTitle className="text-base">그룹 약속 잔디</CardTitle>

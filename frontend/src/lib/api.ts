@@ -106,11 +106,17 @@ export const api = {
     },
     submitTimeVote: async (_id: string, _data: TimeVote) => { await delay(); return { ok: true }; },
     timeSummary: async (_id: string) => { await delay(); return MOCK_TIME_SUMMARY as TimeSlotSummary[]; },
-    confirm: async (id: string, voteDate: string, voteTime: string) => {
+    confirm: async (id: string, voteDate: string, voteTime: string, placeId?: string) => {
       await delay();
       mockAppointments = mockAppointments.map((a) =>
         a.id === id
-          ? { ...a, status: "confirmed" as const, confirmed_date: voteDate, confirmed_time: voteTime }
+          ? {
+              ...a,
+              status: "confirmed" as const,
+              confirmed_date: voteDate,
+              confirmed_time: voteTime,
+              confirmed_place_id: placeId,
+            }
           : a
       );
       return { status: "confirmed", date: voteDate, time: voteTime };
@@ -121,7 +127,16 @@ export const api = {
     },
   },
   places: {
-    list: async (_roomId?: string) => { await delay(); return mockPlaces; },
+    list: async (roomId?: string) => {
+      await delay();
+      return roomId ? mockPlaces : mockPlaces;
+    },
+    get: async (id: string) => {
+      await delay();
+      const p = mockPlaces.find((x) => x.id === id);
+      if (!p) throw new Error("장소를 찾을 수 없습니다");
+      return p;
+    },
     create: async (data: PlaceCreate) => {
       await delay();
       const place: Place = {
@@ -159,9 +174,13 @@ export const api = {
       await delay();
       return { ok: true };
     },
-    travelTime: async () => {
+    travelTime: async (req: TravelTimeRequest) => {
       await delay();
-      return { duration_minutes: 25, distance_meters: 8500, route_summary: "약 25분 · 8.5km (데모)" };
+      return {
+        duration_minutes: 25 + Math.floor(Math.random() * 20),
+        distance_meters: 8500 + Math.floor(Math.random() * 5000),
+        route_summary: `약 ${25 + Math.floor(Math.random() * 20)}분 · 데모 경로`,
+      };
     },
   },
 };
@@ -210,6 +229,21 @@ export interface RoomCreate {
   room_type?: "ONE_TIME" | "REGULAR";
 }
 
+export interface TravelTimeRequest {
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+  place_id?: string;
+  appointment_id?: string;
+}
+
+export interface TravelTimeResponse {
+  duration_minutes: number;
+  distance_meters: number;
+  route_summary: string;
+}
+
 export interface Appointment {
   id: string;
   room_id: string;
@@ -218,6 +252,7 @@ export interface Appointment {
   status: "draft" | "date_voting" | "time_voting" | "confirmed" | "cancelled";
   confirmed_date?: string;
   confirmed_time?: string;
+  confirmed_place_id?: string;
   created_at: string;
 }
 
@@ -269,6 +304,7 @@ export interface Place {
   lat: number;
   lng: number;
   category?: string;
+  kakao_place_id?: string;
   tier: "bronze" | "silver" | "gold" | "platinum";
   avg_rating: number;
   rating_count: number;
