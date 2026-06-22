@@ -8,8 +8,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "MeetSync — 스마트 약속 관리",
-  description: "이동 시간 예측과 2단계 투표로 완벽한 약속을 잡으세요",
+  title: "우리지금만나 — 스마트 약속 관리",
+  description: "이동 시간 예측과 2단계 투표로 약속 확정 성공률을 높이세요",
 };
 
 export default function RootLayout({

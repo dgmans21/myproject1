@@ -48,8 +48,8 @@ export default function HomePage() {
                 <span className="text-primary">완벽한 약속</span>을 잡으세요
               </h1>
               <p className="mt-4 text-lg text-muted leading-relaxed">
-                MeetSync는 이동 시간 예측과 2단계 투표 시스템으로
-                약속 확정 성공률을 높이는 스마트 약속 관리 앱입니다.
+                우리지금만나는 이동 시간 예측과 2단계 투표,
+                신뢰도 칭호로 약속 확정 성공률을 높이는 스마트 약속 관리 앱입니다.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="#auth">
@@ -101,7 +101,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted">
-          MeetSync &copy; 2026 — Supabase + Kakao Maps 기반 서버리스 MVP
+          우리지금만나 &copy; 2026 — Supabase + Kakao Maps 기반
         </div>
       </footer>
     </div>

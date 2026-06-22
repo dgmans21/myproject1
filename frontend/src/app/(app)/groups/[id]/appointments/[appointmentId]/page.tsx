@@ -6,9 +6,11 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { MeetingSettlementWidget } from "@/components/MeetingSettlementWidget";
 import {
   api,
   Appointment,
+  MeetingSettlement,
   VoteSummary,
   TimeSlotSummary,
   STATUS_LABELS,
@@ -35,6 +37,7 @@ export default function AppointmentPage() {
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [dateSummary, setDateSummary] = useState<VoteSummary[]>([]);
   const [timeSummary, setTimeSummary] = useState<TimeSlotSummary[]>([]);
+  const [settlement, setSettlement] = useState<MeetingSettlement | null>(null);
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [selectedSlots, setSelectedSlots] = useState<Map<string, number>>(new Map());
   const dates = getNextDates(14);
@@ -51,6 +54,10 @@ export default function AppointmentPage() {
       if (apt.status === "time_voting" || apt.status === "confirmed") {
         const ts = await api.appointments.timeSummary(appointmentId);
         setTimeSummary(ts);
+      }
+      if (apt.status === "confirmed") {
+        const s = await api.appointments.settlement(appointmentId);
+        setSettlement(s);
       }
     } catch { /* API not ready */ }
   };
@@ -105,7 +112,7 @@ export default function AppointmentPage() {
       <Navbar />
       <main className="mx-auto max-w-4xl px-4 py-8">
         <Link href={`/groups/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-4">
-          <ArrowLeft className="h-4 w-4" /> 그룹으로
+          <ArrowLeft className="h-4 w-4" /> 방으로
         </Link>
 
         <div className="flex items-center gap-3">
@@ -114,17 +121,22 @@ export default function AppointmentPage() {
         </div>
 
         {appointment.status === "confirmed" && (
-          <Card className="mt-6 border-accent/30 bg-accent/5">
-            <div className="flex items-center gap-3">
-              <Check className="h-6 w-6 text-accent" />
-              <div>
-                <CardTitle>약속 확정!</CardTitle>
-                <p className="text-sm text-muted mt-1">
-                  {formatDate(appointment.confirmed_date!)} {formatTime(appointment.confirmed_time!)}
-                </p>
+          <>
+            <Card className="mt-6 border-accent/30 bg-accent/5">
+              <div className="flex items-center gap-3">
+                <Check className="h-6 w-6 text-accent" />
+                <div>
+                  <CardTitle>약속 확정!</CardTitle>
+                  <p className="text-sm text-muted mt-1">
+                    {formatDate(appointment.confirmed_date!)} {formatTime(appointment.confirmed_time!)}
+                  </p>
+                </div>
               </div>
+            </Card>
+            <div className="mt-4">
+              <MeetingSettlementWidget settlement={settlement} />
             </div>
-          </Card>
+          </>
         )}
 
         {/* Phase 1: Date Voting */}

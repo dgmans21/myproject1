@@ -7,7 +7,7 @@ import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { api, Place, TIER_LABELS } from "@/lib/api";
-import { MapPin, Star, Plus, Award } from "lucide-react";
+import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown } from "lucide-react";
 
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -53,6 +53,14 @@ export default function PlacesPage() {
     }
   };
 
+  const handleRecommendation = async (placeId: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
+    try {
+      await api.places.voteRecommendation(placeId, vote);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "투표 실패");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -60,7 +68,7 @@ export default function PlacesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">맛집 탐색</h1>
-            <p className="mt-1 text-muted">티어제 기반 장소 추천 · 월 5회 5점 제한</p>
+            <p className="mt-1 text-muted">티어제 · 신뢰도 투표 · 이동 시간 넛지</p>
           </div>
           <Button onClick={() => setShowAdd(!showAdd)}>
             <Plus className="h-4 w-4" /> 장소 등록
@@ -82,8 +90,9 @@ export default function PlacesPage() {
         <div className="mt-6 flex items-center gap-4 rounded-xl bg-surface p-4 text-sm text-muted">
           <Award className="h-5 w-5 text-warm shrink-0" />
           <span>
-            5점 평가는 <strong className="text-foreground">월 5회</strong>로 제한됩니다.
-            3개 이상의 평가가 쌓이면 브론즈→실버→골드→플래티넘 티어가 부여됩니다.
+            <strong className="text-foreground">5점</strong>은 월 5회 제한 ·{" "}
+            <strong className="text-foreground">4.5점</strong>은 횟수 제한 없음 ·
+            추천/비추천 시 추천인 신뢰도 ±1
           </span>
         </div>
 
@@ -108,6 +117,9 @@ export default function PlacesPage() {
                 </div>
                 <CardTitle className="mt-3">{place.name}</CardTitle>
                 <CardDescription>{place.address}</CardDescription>
+                {place.past_travel_hint && (
+                  <p className="mt-2 text-xs text-accent">{place.past_travel_hint}</p>
+                )}
                 {place.category && (
                   <span className="mt-2 inline-block text-xs text-muted">{place.category}</span>
                 )}
@@ -117,17 +129,28 @@ export default function PlacesPage() {
                   </p>
                 )}
 
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => handleRecommendation(place.id, "RECOMMEND")}>
+                    <ThumbsUp className="h-3.5 w-3.5" /> 추천
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleRecommendation(place.id, "NOT_RECOMMEND")}>
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
                 {ratingPlace === place.id ? (
-                  <div className="mt-4 flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => setRating(r)}
-                        className={`rounded-lg p-1 ${rating >= r ? "text-warm" : "text-muted/30"}`}
-                      >
-                        <Star className={`h-5 w-5 ${rating >= r ? "fill-warm" : ""}`} />
-                      </button>
-                    ))}
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {[1, 2, 3, 4, 4.5, 5].map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setRating(r)}
+                          className={`rounded-lg px-2 py-1 text-sm ${rating === r ? "bg-warm/20 text-warm font-bold" : "text-muted"}`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
                     <Button size="sm" onClick={() => handleRate(place.id)}>평가</Button>
                   </div>
                 ) : (

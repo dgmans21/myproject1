@@ -1,0 +1,54 @@
+# ==========================================
+# Cursor AI Ignore Configuration
+# ==========================================
+
+# 1. Version Control
+.git/
+.gitignore
+.github/
+
+# 2. Frontend (Next.js / Node) Dependencies & Builds
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+.npm/
+.yarn/
+**/*.log
+.env*.local
+
+# 3. Backend (FastAPI / Python) Virtual Env & Caches
+**/venv/
+**/.venv/
+**/env/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.env
+
+# 4. OS & IDE Metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# 5. Heavy Media & Documentation Assets (AI가 읽을 필요 없는 미디어)
+**/public/images/
+**/public/videos/
+**/*.mp4
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.pdf

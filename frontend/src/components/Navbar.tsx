@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, MapPin, Users, LogOut, Sparkles } from "lucide-react";
+import { Calendar, MapPin, Users, LogOut, Sparkles, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 // import { createClient } from "@/lib/supabase/client"; // API 연동 시 복원
 import { useRouter } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: Sparkles },
-  { href: "/groups", label: "그룹", icon: Users },
+  { href: "/groups", label: "방", icon: Users },
   { href: "/places", label: "맛집", icon: MapPin },
+  { href: "/profile", label: "마이페이지", icon: UserCircle },
 ];
 
 export function Navbar() {
@@ -36,7 +37,7 @@ export function Navbar() {
             <Calendar className="h-5 w-5" />
           </div>
           <span className="text-lg font-bold tracking-tight text-foreground">
-            MeetSync
+            우리지금만나
           </span>
         </Link>
 

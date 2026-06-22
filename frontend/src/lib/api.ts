@@ -1,107 +1,86 @@
-// import { createClient } from "@/lib/supabase/client";
 import {
   MOCK_APPOINTMENTS,
   MOCK_DATE_SUMMARY,
-  MOCK_GROUPS,
+  MOCK_HEATMAP,
   MOCK_PLACES,
+  MOCK_PROFILE,
+  MOCK_ROOMS,
+  MOCK_SETTLEMENT,
   MOCK_TIME_SUMMARY,
 } from "./mock-data";
 
-// const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-// --- API 미연결: UI 미리보기 모드 (목 데이터 사용) ---
-// API 연동 시 아래 mock 구현을 제거하고 하단 주석 처리된 실제 API 코드를 복원하세요.
-
-let mockGroups = [...MOCK_GROUPS] as Group[];
-let mockAppointments = [...MOCK_APPOINTMENTS] as Appointment[];
-let mockPlaces = [...MOCK_PLACES] as Place[];
-
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
-// async function getAuthHeaders(): Promise<HeadersInit> {
-//   const supabase = createClient();
-//   const { data: { session } } = await supabase.auth.getSession();
-//   const headers: HeadersInit = { "Content-Type": "application/json" };
-//   if (session?.access_token) {
-//     headers["Authorization"] = `Bearer ${session.access_token}`;
-//   }
-//   return headers;
-// }
-
-// async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-//   const headers = await getAuthHeaders();
-//   const res = await fetch(`${API_BASE}${path}`, {
-//     ...options,
-//     headers: { ...headers, ...options.headers },
-//   });
-//   if (!res.ok) {
-//     const err = await res.json().catch(() => ({ detail: res.statusText }));
-//     throw new Error(err.detail || "API 요청 실패");
-//   }
-//   if (res.status === 204) return undefined as T;
-//   return res.json();
-// }
+let mockRooms = [...MOCK_ROOMS] as Room[];
+let mockAppointments = [...MOCK_APPOINTMENTS] as Appointment[];
+let mockPlaces = [...MOCK_PLACES] as Place[];
+let mockProfile = { ...MOCK_PROFILE } as Profile;
 
 export const api = {
   profiles: {
     me: async () => {
       await delay();
-      return {
-        id: "demo-user",
-        display_name: "데모 사용자",
-        recommender_title: "맛집 발굴단",
-        recommender_score: 80,
-      };
+      return mockProfile;
     },
     update: async (data: Partial<Profile>) => {
       await delay();
-      return { id: "demo-user", display_name: "데모 사용자", recommender_title: "맛집 발굴단", recommender_score: 80, ...data };
+      mockProfile = { ...mockProfile, ...data };
+      return mockProfile;
+    },
+    attendanceHeatmap: async () => {
+      await delay();
+      return MOCK_HEATMAP;
+    },
+    verifySecurity: async (_pin: string) => {
+      await delay();
+      return { verified: true };
     },
   },
-  groups: {
-    list: async () => { await delay(); return mockGroups; },
+  rooms: {
+    list: async () => { await delay(); return mockRooms; },
     get: async (id: string) => {
       await delay();
-      const g = mockGroups.find((x) => x.id === id);
-      if (!g) throw new Error("그룹을 찾을 수 없습니다");
-      return g;
+      const r = mockRooms.find((x) => x.id === id);
+      if (!r) throw new Error("방을 찾을 수 없습니다");
+      return r;
     },
-    create: async (data: GroupCreate) => {
+    create: async (data: RoomCreate) => {
       await delay();
-      const group: Group = {
-        id: `demo-group-${Date.now()}`,
+      const room: Room = {
+        id: `demo-room-${Date.now()}`,
         name: data.name,
         description: data.description,
         purpose: data.purpose,
-        group_type: data.group_type || "ephemeral",
+        room_type: data.room_type || "ONE_TIME",
+        room_status: "ACTIVE",
         member_count: 1,
         created_at: new Date().toISOString(),
       };
-      mockGroups = [group, ...mockGroups];
-      return group;
+      mockRooms = [room, ...mockRooms];
+      return room;
     },
     promote: async (id: string) => {
       await delay();
-      mockGroups = mockGroups.map((g) =>
-        g.id === id ? { ...g, group_type: "formal" as const } : g
+      mockRooms = mockRooms.map((r) =>
+        r.id === id ? { ...r, room_type: "REGULAR" as const } : r
       );
-      return mockGroups.find((g) => g.id === id)!;
+      return mockRooms.find((r) => r.id === id)!;
     },
     delete: async (id: string) => {
       await delay();
-      mockGroups = mockGroups.filter((g) => g.id !== id);
+      mockRooms = mockRooms.filter((r) => r.id !== id);
     },
   },
   appointments: {
-    listByGroup: async (groupId: string) => {
+    listByRoom: async (roomId: string) => {
       await delay();
-      return mockAppointments.filter((a) => a.group_id === groupId);
+      return mockAppointments.filter((a) => a.room_id === roomId);
     },
     create: async (data: AppointmentCreate) => {
       await delay();
       const apt: Appointment = {
         id: `demo-apt-${Date.now()}`,
-        group_id: data.group_id,
+        room_id: data.room_id,
         title: data.title,
         description: data.description,
         status: "date_voting",
@@ -136,9 +115,13 @@ export const api = {
       );
       return { status: "confirmed", date: voteDate, time: voteTime };
     },
+    settlement: async (_id: string) => {
+      await delay();
+      return MOCK_SETTLEMENT as MeetingSettlement;
+    },
   },
   places: {
-    list: async (_groupId?: string) => { await delay(); return mockPlaces; },
+    list: async (_roomId?: string) => { await delay(); return mockPlaces; },
     create: async (data: PlaceCreate) => {
       await delay();
       const place: Place = {
@@ -157,6 +140,9 @@ export const api = {
     },
     rate: async (id: string, data: { rating: number }) => {
       await delay();
+      if (data.rating === 5) {
+        // 데모: 5점 제한 안내 (ADMIN은 서버에서 bypass)
+      }
       mockPlaces = mockPlaces.map((p) =>
         p.id === id
           ? {
@@ -169,6 +155,10 @@ export const api = {
       );
       return { ok: true };
     },
+    voteRecommendation: async (_id: string, _vote: "RECOMMEND" | "NOT_RECOMMEND") => {
+      await delay();
+      return { ok: true };
+    },
     travelTime: async () => {
       await delay();
       return { duration_minutes: 25, distance_meters: 8500, route_summary: "약 25분 · 8.5km (데모)" };
@@ -176,58 +166,53 @@ export const api = {
   },
 };
 
-// --- 실제 API 연동 코드 (현재 주석 처리) ---
-// export const api = {
-//   profiles: {
-//     me: () => request<Profile>("/api/v1/profiles/me"),
-//     update: (data: Partial<Profile>) =>
-//       request<Profile>("/api/v1/profiles/me", { method: "PATCH", body: JSON.stringify(data) }),
-//   },
-//   groups: {
-//     list: () => request<Group[]>("/api/v1/groups"),
-//     get: (id: string) => request<Group>(`/api/v1/groups/${id}`),
-//     create: (data: GroupCreate) =>
-//       request<Group>("/api/v1/groups", { method: "POST", body: JSON.stringify(data) }),
-//     promote: (id: string) =>
-//       request<Group>(`/api/v1/groups/${id}/promote`, { method: "POST" }),
-//     delete: (id: string) =>
-//       request<void>(`/api/v1/groups/${id}`, { method: "DELETE" }),
-//   },
-//   appointments: { ... },
-//   places: { ... },
-// };
+export interface RecommenderTitle {
+  id: number;
+  title: string;
+  min_score: number;
+  badge_color: string;
+  border_style: string;
+}
 
 export interface Profile {
   id: string;
   display_name: string;
+  age_group: "TEENS" | "TWENTIES" | "THIRTIES" | "FORTIES" | "FIFTIES_PLUS";
+  residence: string;
   avatar_url?: string;
   home_address?: string;
   home_lat?: number;
   home_lng?: number;
-  recommender_title: string;
-  recommender_score: number;
+  trust_score: number;
+  badge_tier: "NONE" | "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
+  role: "USER" | "ADMIN";
+  selected_title_id?: number;
+  selected_title?: string;
+  places_adopted_count: number;
+  available_titles?: RecommenderTitle[];
 }
 
-export interface Group {
+export interface Room {
   id: string;
   name: string;
   description?: string;
-  group_type: "ephemeral" | "formal";
+  room_type: "ONE_TIME" | "REGULAR";
+  room_status: "ACTIVE" | "ARCHIVED";
   purpose?: string;
   member_count: number;
   created_at: string;
 }
 
-export interface GroupCreate {
+export interface RoomCreate {
   name: string;
   description?: string;
   purpose?: string;
-  group_type?: "ephemeral" | "formal";
+  room_type?: "ONE_TIME" | "REGULAR";
 }
 
 export interface Appointment {
   id: string;
-  group_id: string;
+  room_id: string;
   title: string;
   description?: string;
   status: "draft" | "date_voting" | "time_voting" | "confirmed" | "cancelled";
@@ -237,7 +222,7 @@ export interface Appointment {
 }
 
 export interface AppointmentCreate {
-  group_id: string;
+  room_id: string;
   title: string;
   description?: string;
 }
@@ -267,6 +252,16 @@ export interface TimeSlotSummary {
   total_score: number;
 }
 
+export interface MeetingSettlement {
+  sense_king_user_id?: string;
+  sense_king_name?: string;
+  sense_king_adopted_count: number;
+  pro_traveler_user_id?: string;
+  pro_traveler_name?: string;
+  pro_travel_duration_minutes?: number;
+  pro_travel_distance_meters?: number;
+}
+
 export interface Place {
   id: string;
   name: string;
@@ -278,6 +273,7 @@ export interface Place {
   avg_rating: number;
   rating_count: number;
   recommender_title?: string;
+  past_travel_hint?: string;
 }
 
 export interface PlaceCreate {
@@ -286,20 +282,7 @@ export interface PlaceCreate {
   lat: number;
   lng: number;
   category?: string;
-  group_id?: string;
-}
-
-export interface TravelTimeRequest {
-  origin_lat: number;
-  origin_lng: number;
-  dest_lat: number;
-  dest_lng: number;
-}
-
-export interface TravelTimeResponse {
-  duration_minutes: number;
-  distance_meters: number;
-  route_summary: string;
+  room_id?: string;
 }
 
 export const TIER_LABELS: Record<string, string> = {
@@ -315,4 +298,9 @@ export const STATUS_LABELS: Record<string, string> = {
   time_voting: "2차 시간 투표",
   confirmed: "확정",
   cancelled: "취소",
+};
+
+export const ROOM_TYPE_LABELS: Record<string, string> = {
+  ONE_TIME: "일회성 방",
+  REGULAR: "정식 그룹",
 };

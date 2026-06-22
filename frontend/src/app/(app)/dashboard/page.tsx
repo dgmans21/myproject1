@@ -19,8 +19,8 @@ export default function DashboardPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Users className="h-5 w-5" />
               </div>
-              <CardTitle className="mt-4">그룹 관리</CardTitle>
-              <CardDescription>일회성 방 만들기 · 정식 그룹 승격</CardDescription>
+              <CardTitle className="mt-4">방 관리</CardTitle>
+              <CardDescription>휘발성 방 · 정식 그룹 승격 · 아카이브 정책</CardDescription>
             </Card>
           </Link>
 
@@ -44,13 +44,15 @@ export default function DashboardPage() {
             </Card>
           </Link>
 
-          <Card className="h-full">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <CardTitle className="mt-4">이동 시간</CardTitle>
-            <CardDescription>출발지 기준 도착 시간 자동 예측</CardDescription>
-          </Card>
+          <Link href="/profile">
+            <Card hover className="h-full">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <CardTitle className="mt-4">마이페이지</CardTitle>
+              <CardDescription>칭호 관리 · 약속 잔디 · 신뢰도</CardDescription>
+            </Card>
+          </Link>
         </div>
 
         <div className="mt-8 gradient-card rounded-2xl border border-border p-8">

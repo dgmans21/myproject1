@@ -7,14 +7,16 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
-import { api, Appointment, Group, STATUS_LABELS } from "@/lib/api";
+import { CalendarHeatmap } from "@/components/CalendarHeatmap";
+import { api, Appointment, Room, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { Plus, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [group, setGroup] = useState<Group | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -22,8 +24,9 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    api.groups.get(id).then(setGroup).catch(() => {});
-    api.appointments.listByGroup(id).then(setAppointments).catch(() => {});
+    api.rooms.get(id).then(setRoom).catch(() => {});
+    api.appointments.listByRoom(id).then(setAppointments).catch(() => {});
+    api.profiles.attendanceHeatmap().then(setHeatmap).catch(() => {});
   }, [id]);
 
   const handleCreate = async () => {
@@ -31,7 +34,7 @@ export default function GroupDetailPage() {
     setCreating(true);
     try {
       const apt = await api.appointments.create({
-        group_id: id,
+        room_id: id,
         title,
         description: description || undefined,
       });
@@ -51,25 +54,30 @@ export default function GroupDetailPage() {
       <Navbar />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <Link href="/groups" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-4">
-          <ArrowLeft className="h-4 w-4" /> 그룹 목록
+          <ArrowLeft className="h-4 w-4" /> 방 목록
         </Link>
 
-        {group && (
+        {room && (
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-foreground">{group.name}</h1>
-                <Badge variant={group.group_type === "formal" ? "primary" : "warm"}>
-                  {group.group_type === "formal" ? "정식" : "일회성"}
+                <h1 className="text-2xl font-bold text-foreground">{room.name}</h1>
+                <Badge variant={room.room_type === "REGULAR" ? "primary" : "warm"}>
+                  {ROOM_TYPE_LABELS[room.room_type]}
                 </Badge>
               </div>
-              {group.purpose && <p className="mt-1 text-muted">{group.purpose}</p>}
+              {room.purpose && <p className="mt-1 text-muted">{room.purpose}</p>}
             </div>
             <Button onClick={() => setShowCreate(!showCreate)}>
               <Plus className="h-4 w-4" /> 새 약속
             </Button>
           </div>
         )}
+
+        <Card className="mt-6">
+          <CardTitle className="text-base">그룹 약속 잔디</CardTitle>
+          <CalendarHeatmap data={heatmap} className="mt-4" weeks={8} />
+        </Card>
 
         {showCreate && (
           <Card className="mt-6">

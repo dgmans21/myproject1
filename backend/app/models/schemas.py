@@ -5,9 +5,27 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-class GroupType(str, Enum):
-    ephemeral = "ephemeral"
-    formal = "formal"
+class AgeGroup(str, Enum):
+    TEENS = "TEENS"
+    TWENTIES = "TWENTIES"
+    THIRTIES = "THIRTIES"
+    FORTIES = "FORTIES"
+    FIFTIES_PLUS = "FIFTIES_PLUS"
+
+
+class UserRole(str, Enum):
+    USER = "USER"
+    ADMIN = "ADMIN"
+
+
+class RoomType(str, Enum):
+    ONE_TIME = "ONE_TIME"
+    REGULAR = "REGULAR"
+
+
+class RoomStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
 
 
 class AppointmentStatus(str, Enum):
@@ -25,59 +43,109 @@ class PlaceTier(str, Enum):
     platinum = "platinum"
 
 
+class RecommendationVoteType(str, Enum):
+    RECOMMEND = "RECOMMEND"
+    NOT_RECOMMEND = "NOT_RECOMMEND"
+
+
+class ProfileBadgeTier(str, Enum):
+    NONE = "NONE"
+    BRONZE = "BRONZE"
+    SILVER = "SILVER"
+    GOLD = "GOLD"
+    PLATINUM = "PLATINUM"
+
+
 # --- Profile ---
 class ProfileUpdate(BaseModel):
     display_name: str | None = None
     avatar_url: str | None = None
+    residence: str | None = None
+    age_group: AgeGroup | None = None
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
+    selected_title_id: int | None = None
+
+
+class RecommenderTitle(BaseModel):
+    id: int
+    title: str
+    min_score: int
+    badge_color: str
+    border_style: str = "none"
 
 
 class ProfileResponse(BaseModel):
     id: UUID
     display_name: str
+    age_group: AgeGroup
+    residence: str
     avatar_url: str | None = None
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
-    recommender_title: str = "신입 탐험가"
-    recommender_score: int = 0
+    trust_score: int = 0
+    badge_tier: ProfileBadgeTier = ProfileBadgeTier.NONE
+    role: UserRole = UserRole.USER
+    selected_title_id: int | None = None
+    selected_title: str | None = None
+    places_adopted_count: int = 0
+    available_titles: list[RecommenderTitle] = []
 
 
-# --- Groups ---
-class GroupCreate(BaseModel):
+class AttendanceHeatmapDay(BaseModel):
+    date: date
+    count: int
+
+
+class SecurityVerifyRequest(BaseModel):
+    pin_or_password: str
+
+
+# --- Rooms ---
+class RoomCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
     purpose: str | None = None
-    group_type: GroupType = GroupType.ephemeral
-    expires_at: str | None = None
+    room_type: RoomType = RoomType.ONE_TIME
 
 
-class GroupResponse(BaseModel):
+class RoomUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+    purpose: str | None = None
+
+
+class RoomResponse(BaseModel):
     id: UUID
     name: str
     description: str | None = None
-    group_type: GroupType
+    room_type: RoomType
+    room_status: RoomStatus = RoomStatus.ACTIVE
     purpose: str | None = None
     member_count: int = 0
     created_at: str
 
 
-class GroupPromoteRequest(BaseModel):
-    pass
+class RoomInviteRequest(BaseModel):
+    invitee_id: UUID
+
+
+class RoomMemberAction(BaseModel):
+    user_id: UUID
 
 
 # --- Appointments ---
 class AppointmentCreate(BaseModel):
-    group_id: UUID
+    room_id: UUID
     title: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
 
 
 class AppointmentResponse(BaseModel):
     id: UUID
-    group_id: UUID
+    room_id: UUID
     title: str
     description: str | None = None
     status: AppointmentStatus
@@ -111,6 +179,16 @@ class TimeSlotSummary(BaseModel):
     total_score: int
 
 
+class MeetingSettlement(BaseModel):
+    sense_king_user_id: UUID | None = None
+    sense_king_name: str | None = None
+    sense_king_adopted_count: int = 0
+    pro_traveler_user_id: UUID | None = None
+    pro_traveler_name: str | None = None
+    pro_travel_duration_minutes: int | None = None
+    pro_travel_distance_meters: int | None = None
+
+
 # --- Places ---
 class PlaceCreate(BaseModel):
     name: str
@@ -119,7 +197,7 @@ class PlaceCreate(BaseModel):
     lng: float
     category: str | None = None
     kakao_place_id: str | None = None
-    group_id: UUID | None = None
+    room_id: UUID | None = None
 
 
 class PlaceResponse(BaseModel):
@@ -133,11 +211,16 @@ class PlaceResponse(BaseModel):
     avg_rating: float
     rating_count: int
     recommender_title: str | None = None
+    past_travel_hint: str | None = None
 
 
 class PlaceRatingCreate(BaseModel):
-    rating: int = Field(..., ge=1, le=5)
+    rating: float = Field(..., ge=1, le=5)
     review: str | None = None
+
+
+class PlaceRecommendationVoteCreate(BaseModel):
+    vote_type: RecommendationVoteType
 
 
 class TravelTimeRequest(BaseModel):
@@ -145,6 +228,8 @@ class TravelTimeRequest(BaseModel):
     origin_lng: float
     dest_lat: float
     dest_lng: float
+    place_id: UUID | None = None
+    appointment_id: UUID | None = None
 
 
 class TravelTimeResponse(BaseModel):
