@@ -56,3 +56,6 @@ next-env.d.ts
 
 # testing
 /coverage
+
+# Internal docs (local only, not committed)
+DEVELOPERS.local.md
