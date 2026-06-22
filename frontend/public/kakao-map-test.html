@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>카카오 지도 키 테스트</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    #map { width: 100%; height: 400px; border: 1px solid #ccc; border-radius: 12px; }
+    .err { color: #b91c1c; white-space: pre-wrap; }
+    input { width: 100%; padding: 8px; margin: 8px 0; }
+    button { padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>카카오 지도 단독 테스트</h1>
+  <p>Next.js 없이 JavaScript 키·도메인·카카오맵 ON 여부만 확인합니다.</p>
+  <label>JavaScript 키 (REST 아님)</label>
+  <input id="key" type="text" placeholder="앱 키 → JavaScript 키" />
+  <button type="button" id="load">지도 불러오기</button>
+  <p id="msg" class="err"></p>
+  <div id="map"></div>
+  <script>
+    document.getElementById("load").onclick = function () {
+      var key = document.getElementById("key").value.trim();
+      var msg = document.getElementById("msg");
+      msg.textContent = "";
+      if (!key) { msg.textContent = "JavaScript 키를 입력하세요."; return; }
+      var old = document.getElementById("kakao-sdk");
+      if (old) old.remove();
+      delete window.kakao;
+      var s = document.createElement("script");
+      s.id = "kakao-sdk";
+      s.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=" + key + "&autoload=false";
+      s.onload = function () {
+        if (!window.kakao || !window.kakao.maps) {
+          msg.textContent = "SDK 로드됐지만 maps 없음 → JavaScript SDK 도메인(" + location.origin + ") 또는 카카오맵 ON 확인";
+          return;
+        }
+        window.kakao.maps.load(function () {
+          new window.kakao.maps.Map(document.getElementById("map"), {
+            center: new window.kakao.maps.LatLng(37.5665, 126.978),
+            level: 3,
+          });
+          msg.textContent = "성공! 같은 키를 frontend/.env.local NEXT_PUBLIC_KAKAO_MAP_KEY 에 넣으세요.";
+          msg.style.color = "#15803d";
+        });
+      };
+      s.onerror = function () {
+        msg.textContent = "script.onerror → JavaScript 키 오류, SDK 도메인 미등록, 또는 제품설정→카카오맵 OFF";
+      };
+      document.head.appendChild(s);
+    };
+  </script>
+</body>
+</html>

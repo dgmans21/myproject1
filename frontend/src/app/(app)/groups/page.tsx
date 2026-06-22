@@ -64,7 +64,7 @@ export default function GroupsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("일회성 방을 삭제하시겠습니까?")) return;
+    if (!confirm("한 번 만나기 방을 삭제하시겠습니까?")) return;
     try {
       await api.rooms.delete(id);
       setRooms((prev) => prev.filter((r) => r.id !== id));
@@ -80,7 +80,7 @@ export default function GroupsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">방</h1>
-            <p className="mt-1 text-muted">휘발성 방 · 정식 그룹 · 3개월 미활동 시 아카이브</p>
+            <p className="mt-1 text-muted">한 번 만나기 · 정식 그룹 · 3개월 약속 없으면 보관</p>
           </div>
           <Button onClick={() => setShowCreate(!showCreate)}>
             <Plus className="h-4 w-4" />
@@ -98,7 +98,7 @@ export default function GroupsPage() {
               <div className="flex gap-3">
                 <Button onClick={() => handleCreate("ONE_TIME")} disabled={creating} variant="accent">
                   <Zap className="h-4 w-4" />
-                  일회성 방
+                  한 번 만나기
                 </Button>
                 <Button onClick={() => handleCreate("REGULAR")} disabled={creating}>
                   <Crown className="h-4 w-4" />

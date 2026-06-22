@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
+import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
-import { api, Place, TIER_LABELS } from "@/lib/api";
+import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
 import { geocodeAddress } from "@/lib/kakao-map";
 import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map } from "lucide-react";
 
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([]);
+  const [quota, setQuota] = useState<RatingQuota | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -23,10 +25,24 @@ export default function PlacesPage() {
   const [geocoding, setGeocoding] = useState(false);
   const [ratingPlace, setRatingPlace] = useState<string | null>(null);
   const [rating, setRating] = useState(4);
+  const [replaceModal, setReplaceModal] = useState<{
+    placeId: string;
+    placeName: string;
+  } | null>(null);
+
+  const loadQuota = useCallback(async () => {
+    try {
+      const q = await api.profiles.ratingQuota();
+      setQuota(q);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     api.places.list().then(setPlaces).catch(() => {});
-  }, []);
+    loadQuota();
+  }, [loadQuota]);
 
   const markers = useMemo(
     () => places.map((p) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng })),
@@ -73,15 +89,32 @@ export default function PlacesPage() {
     }
   };
 
-  const handleRate = async (placeId: string) => {
+  const submitRating = async (placeId: string, replacePlaceId?: string) => {
     try {
-      await api.places.rate(placeId, { rating });
+      await api.places.rate(placeId, { rating, replace_place_id: replacePlaceId });
       setRatingPlace(null);
-      const updated = await api.places.list();
+      setReplaceModal(null);
+      const [updated, q] = await Promise.all([api.places.list(), api.profiles.ratingQuota()]);
       setPlaces(updated);
+      setQuota(q);
     } catch (err) {
       alert(err instanceof Error ? err.message : "평가 실패");
     }
+  };
+
+  const handleRate = async (placeId: string) => {
+    const place = places.find((p) => p.id === placeId);
+    if (!place) return;
+
+    if (rating === 5 && quota) {
+      const alreadyFive = quota.five_star.places.some((p) => p.place_id === placeId);
+      if (!alreadyFive && quota.five_star.used >= quota.five_star.max) {
+        setReplaceModal({ placeId, placeName: place.name });
+        return;
+      }
+    }
+
+    await submitRating(placeId);
   };
 
   const handleRecommendation = async (placeId: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
@@ -99,7 +132,7 @@ export default function PlacesPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-foreground">맛집 탐색</h1>
-            <p className="mt-1 text-muted">티어제 · 신뢰도 투표 · 이동 시간 넛지</p>
+            <p className="mt-1 text-muted">맛집 등급 · 추천 투표 · 이동 시간 안내</p>
           </div>
           <div className="flex gap-2">
             <Link href="/places/map">
@@ -154,13 +187,24 @@ export default function PlacesPage() {
           </Card>
         )}
 
-        <div className="mt-6 flex items-center gap-4 rounded-xl bg-surface p-4 text-sm text-muted">
+        <div className="mt-6 flex flex-col gap-2 rounded-xl bg-surface p-4 text-sm text-muted sm:flex-row sm:items-center sm:gap-4">
           <Award className="h-5 w-5 text-warm shrink-0" />
-          <span>
-            <strong className="text-foreground">5점</strong>은 월 5회 제한 ·{" "}
-            <strong className="text-foreground">4.5점</strong>은 횟수 제한 없음 ·
-            추천/비추천 시 추천인 신뢰도 ±1
-          </span>
+          <div className="space-y-1">
+            <p>
+              <strong className="text-foreground">5점</strong>은 평생 최대 5곳 · 다 쓰면 기존 5점
+              하나를 취소하고 새로 줄 수 있어요
+            </p>
+            <p>
+              <strong className="text-foreground">4.5점</strong>은 이번 달{" "}
+              {quota ? `${quota.four_half.used}/${quota.four_half.max}회` : "5회"} · 추천/비추천 시
+              추천인 신뢰도 ±1
+            </p>
+            {quota && (
+              <p className="text-xs">
+                내 5점 사용: {quota.five_star.used}/{quota.five_star.max}곳
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -239,6 +283,16 @@ export default function PlacesPage() {
           )}
         </div>
       </main>
+
+      <FiveStarReplaceModal
+        open={Boolean(replaceModal)}
+        targetPlaceName={replaceModal?.placeName ?? ""}
+        existingPlaces={quota?.five_star.places ?? []}
+        onCancel={() => setReplaceModal(null)}
+        onConfirm={(replacePlaceId) => {
+          if (replaceModal) submitRating(replaceModal.placeId, replacePlaceId);
+        }}
+      />
     </div>
   );
 }

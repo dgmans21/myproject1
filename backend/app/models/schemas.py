@@ -54,6 +54,11 @@ class ProfileBadgeTier(str, Enum):
     SILVER = "SILVER"
     GOLD = "GOLD"
     PLATINUM = "PLATINUM"
+    EMERALD = "EMERALD"
+    DIAMOND = "DIAMOND"
+    MASTER = "MASTER"
+    GRANDMASTER = "GRANDMASTER"
+    SUPREME = "SUPREME"
 
 
 # --- Profile ---
@@ -97,6 +102,18 @@ class ProfileResponse(BaseModel):
 class AttendanceHeatmapDay(BaseModel):
     date: date
     count: int
+
+
+class RankingEntry(BaseModel):
+    rank: int
+    user_id: UUID
+    display_name: str
+    trust_score: int
+    residence: str
+    selected_title: str | None = None
+    badge_color: str | None = None
+    badge_tier: ProfileBadgeTier = ProfileBadgeTier.NONE
+    is_me: bool = False
 
 
 class SecurityVerifyRequest(BaseModel):
@@ -217,6 +234,29 @@ class PlaceResponse(BaseModel):
 class PlaceRatingCreate(BaseModel):
     rating: float = Field(..., ge=1, le=5)
     review: str | None = None
+    replace_place_id: UUID | None = None
+
+
+class FiveStarPlaceItem(BaseModel):
+    place_id: UUID
+    place_name: str
+
+
+class FiveStarQuotaInfo(BaseModel):
+    used: int
+    max: int
+    places: list[FiveStarPlaceItem]
+
+
+class FourHalfQuotaInfo(BaseModel):
+    used: int
+    max: int
+    month_year: str
+
+
+class RatingQuotaResponse(BaseModel):
+    five_star: FiveStarQuotaInfo
+    four_half: FourHalfQuotaInfo
 
 
 class PlaceRecommendationVoteCreate(BaseModel):

@@ -38,11 +38,14 @@ export function kakaoDirectionsByCarUrl(from: KakaoLatLng, to: KakaoLatLng): str
 export function getKakaoMapSdkUrl(): string | null {
   const key = process.env.NEXT_PUBLIC_KAKAO_MAP_KEY;
   if (!key) return null;
-  // 공식 가이드: services(주소검색·좌표변환), clusterer(다중 마커)
-  return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services,clusterer`;
+  return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services,clusterer&autoload=false`;
 }
 
 let sdkLoadPromise: Promise<void> | null = null;
+
+function resetSdkLoadPromise() {
+  sdkLoadPromise = null;
+}
 
 export function loadKakaoMapSdk(): Promise<void> {
   if (typeof window === "undefined") {
@@ -60,13 +63,36 @@ export function loadKakaoMapSdk(): Promise<void> {
 
   if (!sdkLoadPromise) {
     sdkLoadPromise = new Promise((resolve, reject) => {
+      // fetch()는 CORS로 막히므로 공식 가이드대로 script 태그만 사용
       const script = document.createElement("script");
       script.src = url;
       script.async = true;
       script.onload = () => {
-        window.kakao!.maps.load(() => resolve());
+        if (!window.kakao?.maps) {
+          resetSdkLoadPromise();
+          reject(
+            new Error(
+              `Kakao SDK 초기화 실패. JavaScript 키(REST 아님)와 웹 도메인(${window.location.origin})·기본 도메인 선택을 확인하세요.`
+            )
+          );
+          return;
+        }
+        window.kakao.maps.load(() => resolve());
       };
-      script.onerror = () => reject(new Error("Kakao Maps SDK 로드 실패"));
+      script.onerror = () => {
+        resetSdkLoadPromise();
+        reject(
+          new Error(
+            [
+              "Kakao Maps SDK 로드 실패. 아래를 순서대로 확인하세요.",
+              "① 앱 설정 → 앱 키 → JavaScript 키 값을 .env.local에 넣었는지 (REST API 키 아님)",
+              "② JavaScript 키 상세 → JavaScript SDK 도메인에 http://localhost:3000 등록",
+              "③ 제품 설정 → 카카오맵 → 상태를 ON(활성화) — 이 단계를 빠뜨리면 지도가 안 뜹니다",
+              `④ 브라우저 주소가 등록 도메인과 일치: ${window.location.origin}`,
+            ].join(" ")
+          )
+        );
+      };
       document.head.appendChild(script);
     });
   }

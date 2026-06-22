@@ -15,7 +15,10 @@ CREATE TYPE appointment_status AS ENUM (
 );
 CREATE TYPE place_tier AS ENUM ('bronze', 'silver', 'gold', 'platinum');
 CREATE TYPE recommendation_vote AS ENUM ('RECOMMEND', 'NOT_RECOMMEND');
-CREATE TYPE profile_badge_tier AS ENUM ('NONE', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM');
+CREATE TYPE profile_badge_tier AS ENUM (
+  'NONE', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM',
+  'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'KOREAN_MICHELIN'
+);
 
 -- ============================================================
 -- Profiles (extends Supabase auth.users)
@@ -52,9 +55,14 @@ CREATE TABLE recommender_titles (
 INSERT INTO recommender_titles (title, min_score, badge_color, border_style) VALUES
   ('신입 탐험가', 0, '#94A3B8', 'none'),
   ('맛집 발굴단', 10, '#60A5FA', 'bronze'),
-  ('미식 가이드', 30, '#34D399', 'silver'),
-  ('gourmet 큐레이터', 60, '#FBBF24', 'gold'),
-  ('전설의 미식家', 100, '#F472B6', 'platinum');
+  ('미식 가이드', 50, '#34D399', 'silver'),
+  ('gourmet 큐레이터', 150, '#FBBF24', 'gold'),
+  ('밥구르망', 300, '#2563EB', 'platinum'),
+  ('밥슐랭가이드', 500, '#10B981', 'emerald'),
+  ('다이아 방구석쓰리스타', 700, '#06B6D4', 'diamond'),
+  ('마스터 한국의 미식家', 1000, '#1E40AF', 'korean_michelin'),
+  ('전설의 미식왕 그랜드마스터', 1500, '#B45309', 'korean_michelin'),
+  ('명예 미슐랭 가이드', 2000, '#FFD54F', 'korean_michelin');
 
 ALTER TABLE profiles
   ADD CONSTRAINT profiles_selected_title_id_fkey
@@ -251,9 +259,14 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION calc_badge_tier(score INTEGER)
 RETURNS profile_badge_tier AS $$
 BEGIN
-  IF score >= 100 THEN RETURN 'PLATINUM';
-  ELSIF score >= 60 THEN RETURN 'GOLD';
-  ELSIF score >= 30 THEN RETURN 'SILVER';
+  IF score >= 2000 THEN RETURN 'SUPREME';
+  ELSIF score >= 1500 THEN RETURN 'GRANDMASTER';
+  ELSIF score >= 1000 THEN RETURN 'MASTER';
+  ELSIF score >= 700 THEN RETURN 'DIAMOND';
+  ELSIF score >= 500 THEN RETURN 'EMERALD';
+  ELSIF score >= 300 THEN RETURN 'PLATINUM';
+  ELSIF score >= 150 THEN RETURN 'GOLD';
+  ELSIF score >= 50 THEN RETURN 'SILVER';
   ELSIF score >= 10 THEN RETURN 'BRONZE';
   ELSE RETURN 'NONE';
   END IF;

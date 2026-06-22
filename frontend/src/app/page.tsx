@@ -18,14 +18,14 @@ const features = [
   },
   {
     icon: MapPin,
-    title: "맛집 티어 & 칭호",
-    description: "평점 남용을 막는 알고리즘과 추천 유저 칭호 시스템으로 신뢰할 수 있는 장소를 찾습니다.",
+    title: "맛집 등급 & 칭호",
+    description: "5점·4.5점 사용 한도로 평점 남용을 막고, 추천인 칭호로 신뢰할 수 있는 장소를 찾습니다.",
     color: "text-warm bg-orange-100",
   },
   {
     icon: Users,
     title: "유연한 그룹 관리",
-    description: "일회성 방부터 정식 그룹 승격까지, 목적에 맞는 그룹핑을 지원합니다.",
+    description: "한 번 만나기부터 정식 그룹까지, 목적에 맞게 방을 만들 수 있어요.",
     color: "text-purple-600 bg-purple-100",
   },
 ];

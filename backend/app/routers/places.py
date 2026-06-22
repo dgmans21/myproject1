@@ -14,11 +14,13 @@ from app.models.schemas import (
 )
 from app.services.kakao import get_travel_time
 from app.services.rating import (
-    MAX_FIVE_STAR_PER_MONTH,
-    calc_tier,
-    current_month_year,
+    MAX_FIVE_STAR_TOTAL,
+    MAX_FOUR_HALF_STAR_PER_MONTH,
+    count_user_five_star_ratings,
+    get_user_rating_quota,
     is_five_star_rating,
-    is_quota_exempt_rating,
+    is_four_half_star_rating,
+    recalc_place_stats,
 )
 
 router = APIRouter(prefix="/places", tags=["places"])
@@ -37,7 +39,20 @@ def _past_travel_hint(sb, user_id: str, place_id: str) -> str | None:
     if not logs.data:
         return None
     mins = logs.data[0]["duration_minutes"]
-    return f"지난 모임 기준 약 {mins}분 소요"
+    return f"지난에 모였을 때 약 {mins}분 걸렸어요"
+
+
+def _get_existing_rating(sb, user_id: str, place_id: str) -> float | None:
+    result = (
+        sb.table("place_ratings")
+        .select("rating")
+        .eq("place_id", place_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return float(result.data[0]["rating"])
 
 
 @router.get("", response_model=list[PlaceResponse])
@@ -113,29 +128,53 @@ async def rate_place(
     unlimited: bool = Depends(get_debug_unlimited_flag),
 ):
     sb = get_supabase()
+    place_key = str(place_id)
 
     if body.rating * 2 != int(body.rating * 2):
         raise HTTPException(status_code=400, detail="평점은 0.5 단위만 가능합니다")
 
-    if is_five_star_rating(body.rating) and not unlimited:
-        month = current_month_year()
-        quota = (
-            sb.table("user_rating_quota")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("month_year", month)
-            .execute()
-        )
-        used = quota.data[0]["five_star_used"] if quota.data else 0
-        if used >= MAX_FIVE_STAR_PER_MONTH:
-            raise HTTPException(
-                status_code=400,
-                detail=f"이번 달 5점 평가 한도({MAX_FIVE_STAR_PER_MONTH}회)를 초과했습니다",
-            )
+    old_rating = _get_existing_rating(sb, user_id, place_key)
+
+    if not unlimited:
+        if is_five_star_rating(body.rating) and old_rating != 5:
+            used = count_user_five_star_ratings(sb, user_id, exclude_place_id=place_key)
+            if used >= MAX_FIVE_STAR_TOTAL:
+                if not body.replace_place_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"5점은 최대 {MAX_FIVE_STAR_TOTAL}곳까지 줄 수 있습니다. "
+                            "다른 곳의 5점을 취소하고 주세요."
+                        ),
+                    )
+                replace_key = str(body.replace_place_id)
+                if replace_key == place_key:
+                    raise HTTPException(status_code=400, detail="같은 장소로는 교체할 수 없습니다")
+                replace_row = (
+                    sb.table("place_ratings")
+                    .select("rating")
+                    .eq("place_id", replace_key)
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                if not replace_row.data or float(replace_row.data[0]["rating"]) != 5:
+                    raise HTTPException(status_code=400, detail="교체할 5점 평가를 찾을 수 없습니다")
+                sb.table("place_ratings").update({"rating": 4}).eq(
+                    "place_id", replace_key
+                ).eq("user_id", user_id).execute()
+                recalc_place_stats(sb, replace_key)
+
+        if is_four_half_star_rating(body.rating) and old_rating != 4.5:
+            quota = get_user_rating_quota(sb, user_id)
+            if quota["four_half"]["used"] >= MAX_FOUR_HALF_STAR_PER_MONTH:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"이번 달 4.5점 평가 한도({MAX_FOUR_HALF_STAR_PER_MONTH}회)를 초과했습니다",
+                )
 
     sb.table("place_ratings").upsert(
         {
-            "place_id": str(place_id),
+            "place_id": place_key,
             "user_id": user_id,
             "rating": body.rating,
             "review": body.review,
@@ -143,33 +182,8 @@ async def rate_place(
         on_conflict="place_id,user_id",
     ).execute()
 
-    if is_five_star_rating(body.rating) and not unlimited and not is_quota_exempt_rating(body.rating):
-        month = current_month_year()
-        quota = (
-            sb.table("user_rating_quota")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("month_year", month)
-            .execute()
-        )
-        used = quota.data[0]["five_star_used"] if quota.data else 0
-        sb.table("user_rating_quota").upsert(
-            {"user_id": user_id, "month_year": month, "five_star_used": used + 1},
-            on_conflict="user_id,month_year",
-        ).execute()
-
-    ratings = sb.table("place_ratings").select("rating").eq("place_id", str(place_id)).execute()
-    all_ratings = [float(r["rating"]) for r in ratings.data]
-    avg = sum(all_ratings) / len(all_ratings) if all_ratings else 0
-    tier = calc_tier(avg, len(all_ratings))
-
-    sb.table("places").update({
-        "avg_rating": round(avg, 2),
-        "rating_count": len(all_ratings),
-        "tier": tier,
-    }).eq("id", str(place_id)).execute()
-
-    return {"ok": True, "new_tier": tier, "avg_rating": round(avg, 2)}
+    tier, avg = recalc_place_stats(sb, place_key)
+    return {"ok": True, "new_tier": tier, "avg_rating": avg}
 
 
 @router.post("/{place_id}/recommendation-votes", status_code=201)

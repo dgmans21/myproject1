@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -72,6 +73,10 @@ export default function ProfilePage() {
             <p className="mt-4 text-sm text-muted">
               신뢰도 <strong className="text-foreground">{profile.trust_score}</strong>점
               · 장소 채택 {profile.places_adopted_count}회
+              ·{" "}
+              <Link href="/ranking" className="text-primary underline">
+                랭킹 보기
+              </Link>
             </p>
           </Card>
         </ProfileBadgeBorder>

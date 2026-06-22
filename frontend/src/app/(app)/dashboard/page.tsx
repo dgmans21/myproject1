@@ -1,6 +1,6 @@
 import { Navbar } from "@/components/Navbar";
 import { DashboardOutputs } from "@/components/DashboardOutputs";
-import { Sparkles, Users, MapPin, Calendar } from "lucide-react";
+import { Sparkles, Users, MapPin, Calendar, Trophy } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import Link from "next/link";
 
@@ -14,14 +14,14 @@ export default function DashboardPage() {
           <p className="mt-1 text-muted">약속 관리를 시작해보세요</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Link href="/groups">
             <Card hover className="h-full">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Users className="h-5 w-5" />
               </div>
               <CardTitle className="mt-4">방 관리</CardTitle>
-              <CardDescription>휘발성 방 · 정식 그룹 승격 · 아카이브 정책</CardDescription>
+              <CardDescription>한 번 만나기 · 정식 그룹 전환 · 오래 안 쓰면 보관</CardDescription>
             </Card>
           </Link>
 
@@ -41,7 +41,7 @@ export default function DashboardPage() {
                 <MapPin className="h-5 w-5" />
               </div>
               <CardTitle className="mt-4">맛집 탐색</CardTitle>
-              <CardDescription>티어제 기반 장소 추천 & 평가</CardDescription>
+              <CardDescription>맛집 등급 · 추천 & 평가</CardDescription>
             </Card>
           </Link>
 
@@ -54,6 +54,16 @@ export default function DashboardPage() {
               <CardDescription>칭호 관리 · 약속 잔디 · 신뢰도</CardDescription>
             </Card>
           </Link>
+
+          <Link href="/ranking">
+            <Card hover className="h-full">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-warm">
+                <Trophy className="h-5 w-5" />
+              </div>
+              <CardTitle className="mt-4">신뢰도 랭킹</CardTitle>
+              <CardDescription>칭호·신뢰도 순위 확인</CardDescription>
+            </Card>
+          </Link>
         </div>
 
         <DashboardOutputs />
@@ -63,7 +73,7 @@ export default function DashboardPage() {
           <ol className="mt-4 space-y-3 text-sm text-muted">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">1</span>
-              <span><strong className="text-foreground">그룹 만들기</strong> — 일회성 방 또는 정식 그룹을 생성하세요</span>
+              <span><strong className="text-foreground">그룹 만들기</strong> — 한 번 만나기 또는 정식 그룹을 생성하세요</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">2</span>
@@ -75,7 +85,7 @@ export default function DashboardPage() {
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">4</span>
-              <span><strong className="text-foreground">장소 추천 & 확정</strong> — 맛집 티어를 확인하고 약속을 확정하세요</span>
+              <span><strong className="text-foreground">장소 추천 & 확정</strong> — 맛집 등급을 확인하고 약속을 확정하세요</span>
             </li>
           </ol>
         </div>

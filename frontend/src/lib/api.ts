@@ -4,6 +4,7 @@ import {
   MOCK_HEATMAP,
   MOCK_PLACES,
   MOCK_PROFILE,
+  MOCK_RANKING,
   MOCK_ROOMS,
   MOCK_SETTLEMENT,
   MOCK_TIME_SUMMARY,
@@ -11,16 +12,125 @@ import {
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
+const MAX_FIVE_STAR_TOTAL = 5;
+const MAX_FOUR_HALF_PER_MONTH = 5;
+
+function currentMonthYear() {
+  return new Date().toISOString().slice(0, 7);
+}
+
 let mockRooms = [...MOCK_ROOMS] as Room[];
 let mockAppointments = [...MOCK_APPOINTMENTS] as Appointment[];
 let mockPlaces = [...MOCK_PLACES] as Place[];
 let mockProfile = { ...MOCK_PROFILE } as Profile;
+/** 유저별 장소 평점 (데모) */
+let mockUserRatings: Record<string, number> = {};
+let mockFourHalfUsed = 0;
+let mockFourHalfMonth = currentMonthYear();
+
+function syncFourHalfMonth() {
+  const month = currentMonthYear();
+  if (month !== mockFourHalfMonth) {
+    mockFourHalfMonth = month;
+    mockFourHalfUsed = 0;
+  }
+}
+
+function recalcPlaceAvg(placeId: string, rating: number, isNew: boolean) {
+  mockPlaces = mockPlaces.map((p) => {
+    if (p.id !== placeId) return p;
+    const count = isNew ? p.rating_count + 1 : p.rating_count;
+    return {
+      ...p,
+      avg_rating: rating,
+      rating_count: Math.max(count, 1),
+      tier: rating >= 4.5 ? ("gold" as const) : rating >= 4 ? ("silver" as const) : p.tier,
+    };
+  });
+}
+
+function buildMockRatingQuota(): RatingQuota {
+  syncFourHalfMonth();
+  const fivePlaces: FiveStarPlaceItem[] = Object.entries(mockUserRatings)
+    .filter(([, r]) => r === 5)
+    .map(([placeId]) => {
+      const p = mockPlaces.find((x) => x.id === placeId);
+      return { place_id: placeId, place_name: p?.name ?? placeId };
+    });
+  return {
+    five_star: { used: fivePlaces.length, max: MAX_FIVE_STAR_TOTAL, places: fivePlaces },
+    four_half: {
+      used: mockFourHalfUsed,
+      max: MAX_FOUR_HALF_PER_MONTH,
+      month_year: mockFourHalfMonth,
+    },
+  };
+}
+
+function applyMockRating(
+  placeId: string,
+  rating: number,
+  replacePlaceId?: string
+): void {
+  syncFourHalfMonth();
+  const oldRating = mockUserRatings[placeId];
+  const isNew = oldRating === undefined;
+
+  if (rating === 5 && oldRating !== 5) {
+    const fiveCount = Object.entries(mockUserRatings).filter(
+      ([id, r]) => r === 5 && id !== placeId
+    ).length;
+    if (fiveCount >= MAX_FIVE_STAR_TOTAL) {
+      if (!replacePlaceId) {
+        throw new Error(
+          `5점은 최대 ${MAX_FIVE_STAR_TOTAL}곳까지 줄 수 있습니다. 다른 곳의 5점을 취소하고 주세요.`
+        );
+      }
+      if (mockUserRatings[replacePlaceId] !== 5) {
+        throw new Error("교체할 5점 평가를 찾을 수 없습니다");
+      }
+      mockUserRatings[replacePlaceId] = 4;
+      recalcPlaceAvg(replacePlaceId, 4, false);
+    }
+  }
+
+  if (rating === 4.5 && oldRating !== 4.5) {
+    if (mockFourHalfUsed >= MAX_FOUR_HALF_PER_MONTH) {
+      throw new Error(
+        `이번 달 4.5점 평가 한도(${MAX_FOUR_HALF_PER_MONTH}회)를 초과했습니다`
+      );
+    }
+    mockFourHalfUsed += 1;
+  }
+
+  mockUserRatings[placeId] = rating;
+  recalcPlaceAvg(placeId, rating, isNew);
+}
 
 export const api = {
   profiles: {
     me: async () => {
       await delay();
       return mockProfile;
+    },
+    ratingQuota: async () => {
+      await delay();
+      return buildMockRatingQuota();
+    },
+    ranking: async (limit = 50) => {
+      await delay();
+      const sorted = [...MOCK_RANKING].sort((a, b) => b.trust_score - a.trust_score);
+      return sorted.slice(0, limit).map((row, idx) => ({
+        rank: idx + 1,
+        user_id: row.user_id,
+        display_name: row.display_name,
+        trust_score: row.trust_score,
+        residence: row.residence,
+        selected_title: row.selected_title,
+        badge_color: row.badge_color,
+        badge_tier: row.badge_tier,
+        is_me: row.user_id === mockProfile.id,
+      }));
     },
     update: async (data: Partial<Profile>) => {
       await delay();
@@ -153,21 +263,12 @@ export const api = {
       mockPlaces = [place, ...mockPlaces];
       return place;
     },
-    rate: async (id: string, data: { rating: number }) => {
+    rate: async (
+      id: string,
+      data: { rating: number; replace_place_id?: string }
+    ) => {
       await delay();
-      if (data.rating === 5) {
-        // 데모: 5점 제한 안내 (ADMIN은 서버에서 bypass)
-      }
-      mockPlaces = mockPlaces.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              avg_rating: data.rating,
-              rating_count: p.rating_count + 1,
-              tier: data.rating >= 4.5 ? "gold" as const : p.tier,
-            }
-          : p
-      );
+      applyMockRating(id, data.rating, data.replace_place_id);
       return { ok: true };
     },
     voteRecommendation: async (_id: string, _vote: "RECOMMEND" | "NOT_RECOMMEND") => {
@@ -203,7 +304,17 @@ export interface Profile {
   home_lat?: number;
   home_lng?: number;
   trust_score: number;
-  badge_tier: "NONE" | "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
+  badge_tier:
+    | "NONE"
+    | "BRONZE"
+    | "SILVER"
+    | "GOLD"
+    | "PLATINUM"
+    | "EMERALD"
+    | "DIAMOND"
+    | "MASTER"
+    | "GRANDMASTER"
+    | "SUPREME";
   role: "USER" | "ADMIN";
   selected_title_id?: number;
   selected_title?: string;
@@ -312,6 +423,36 @@ export interface Place {
   past_travel_hint?: string;
 }
 
+export interface FiveStarPlaceItem {
+  place_id: string;
+  place_name: string;
+}
+
+export interface RatingQuota {
+  five_star: {
+    used: number;
+    max: number;
+    places: FiveStarPlaceItem[];
+  };
+  four_half: {
+    used: number;
+    max: number;
+    month_year: string;
+  };
+}
+
+export interface RankingEntry {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  trust_score: number;
+  residence: string;
+  selected_title?: string;
+  badge_color?: string;
+  badge_tier: Profile["badge_tier"];
+  is_me: boolean;
+}
+
 export interface PlaceCreate {
   name: string;
   address: string;
@@ -337,6 +478,11 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 export const ROOM_TYPE_LABELS: Record<string, string> = {
-  ONE_TIME: "일회성 방",
+  ONE_TIME: "한 번 만나기",
   REGULAR: "정식 그룹",
+};
+
+export const ROOM_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "사용 중",
+  ARCHIVED: "보관됨",
 };

@@ -75,7 +75,7 @@ export const MOCK_PLACES = [
     avg_rating: 4.3,
     rating_count: 12,
     recommender_title: "미식 가이드",
-    past_travel_hint: "지난 모임 기준 약 32분 소요",
+    past_travel_hint: "지난에 모였을 때 약 32분 걸렸어요",
   },
   {
     id: "demo-place-2",
@@ -100,7 +100,96 @@ export const MOCK_PLACES = [
     avg_rating: 4.7,
     rating_count: 24,
     recommender_title: "gourmet 큐레이터",
-    past_travel_hint: "지난 모임 기준 약 48분 소요",
+    past_travel_hint: "지난에 모였을 때 약 48분 걸렸어요",
+  },
+];
+
+/** recommender_titles 시드와 동일 (데모·타입 참조용) */
+export const RECOMMENDER_TITLES = [
+  { id: 1, title: "신입 탐험가", min_score: 0, badge_color: "#94A3B8", border_style: "none" },
+  { id: 2, title: "맛집 발굴단", min_score: 10, badge_color: "#60A5FA", border_style: "bronze" },
+  { id: 3, title: "미식 가이드", min_score: 50, badge_color: "#34D399", border_style: "silver" },
+  { id: 4, title: "gourmet 큐레이터", min_score: 150, badge_color: "#FBBF24", border_style: "gold" },
+  { id: 5, title: "밥구르망", min_score: 300, badge_color: "#2563EB", border_style: "platinum" },
+  { id: 6, title: "밥슐령가이드", min_score: 500, badge_color: "#10B981", border_style: "emerald" },
+  { id: 7, title: "다이아 방구석쓰리스타", min_score: 700, badge_color: "#06B6D4", border_style: "diamond" },
+  { id: 8, title: "마스터 한국의 미식家", min_score: 1000, badge_color: "#1E40AF", border_style: "korean_michelin" },
+  { id: 9, title: "전설의 미식왕 그랜드마스터", min_score: 1500, badge_color: "#B45309", border_style: "korean_michelin" },
+  { id: 10, title: "명예 미슐랭 가이드", min_score: 2000, badge_color: "#FFD54F", border_style: "korean_michelin" },
+] as const;
+
+export const MOCK_RANKING = [
+  {
+    user_id: "demo-rank-1",
+    display_name: "골드맛집러",
+    trust_score: 2280,
+    residence: "서울 강남구",
+    selected_title: "명예 미슐랭 가이드",
+    badge_color: "#FFD54F",
+    badge_tier: "SUPREME" as const,
+  },
+  {
+    user_id: "demo-rank-2",
+    display_name: "미식탐험가",
+    trust_score: 1620,
+    residence: "경기 성남시",
+    selected_title: "전설의 미식왕 그랜드마스터",
+    badge_color: "#B45309",
+    badge_tier: "GRANDMASTER" as const,
+  },
+  {
+    user_id: "demo-rank-3",
+    display_name: "한식마스터",
+    trust_score: 1180,
+    residence: "서울 마포구",
+    selected_title: "마스터 한국의 미식家",
+    badge_color: "#1E40AF",
+    badge_tier: "MASTER" as const,
+  },
+  {
+    user_id: "demo-user",
+    display_name: "데모 사용자",
+    trust_score: 35,
+    residence: "서울 강남구",
+    selected_title: "미식 가이드",
+    badge_color: "#34D399",
+    badge_tier: "SILVER" as const,
+  },
+  {
+    user_id: "demo-rank-5",
+    display_name: "방구석평론가",
+    trust_score: 720,
+    residence: "인천 연수구",
+    selected_title: "다이아 방구석쓰리스타",
+    badge_color: "#06B6D4",
+    badge_tier: "DIAMOND" as const,
+  },
+  {
+    user_id: "demo-rank-6",
+    display_name: "밥슐령지도",
+    trust_score: 540,
+    residence: "서울 송파구",
+    selected_title: "밥슐령가이드",
+    badge_color: "#10B981",
+    badge_tier: "EMERALD" as const,
+  },
+  {
+    user_id: "demo-rank-7",
+    display_name: "밥구르망팬",
+    trust_score: 310,
+    residence: "부산 해운대구",
+    selected_title: "밥구르망",
+    badge_color: "#2563EB",
+    badge_tier: "PLATINUM" as const,
+  },
+  {
+    user_id: "demo-rank-8",
+    display_name: "큐레이터J",
+    trust_score: 165,
+    residence: "대구 수성구",
+    selected_title: "gourmet 큐레이터",
+    badge_color: "#FBBF24",
+    badge_tier: "GOLD" as const,
   },
 ];
 
@@ -117,11 +206,7 @@ export const MOCK_PROFILE = {
   selected_title_id: 3,
   selected_title: "미식 가이드",
   places_adopted_count: 4,
-  available_titles: [
-    { id: 1, title: "신입 탐험가", min_score: 0, badge_color: "#94A3B8", border_style: "none" },
-    { id: 2, title: "맛집 발굴단", min_score: 10, badge_color: "#60A5FA", border_style: "bronze" },
-    { id: 3, title: "미식 가이드", min_score: 30, badge_color: "#34D399", border_style: "silver" },
-  ],
+  available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 35),
 };
 
 export const MOCK_HEATMAP = [

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, MapPin, Users, LogOut, Sparkles, UserCircle } from "lucide-react";
+import { Calendar, MapPin, Users, LogOut, Sparkles, UserCircle, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 // import { createClient } from "@/lib/supabase/client"; // API 연동 시 복원
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/dashboard", label: "대시보드", icon: Sparkles },
   { href: "/groups", label: "방", icon: Users },
   { href: "/places", label: "맛집", icon: MapPin },
+  { href: "/ranking", label: "랭킹", icon: Trophy },
   { href: "/profile", label: "마이페이지", icon: UserCircle },
 ];
 

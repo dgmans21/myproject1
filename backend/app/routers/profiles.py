@@ -2,16 +2,22 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth import get_current_user_id, get_debug_unlimited_flag
+from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.models.schemas import (
     AttendanceHeatmapDay,
+    FourHalfQuotaInfo,
+    FiveStarPlaceItem,
+    FiveStarQuotaInfo,
     ProfileResponse,
     ProfileUpdate,
+    RankingEntry,
+    RatingQuotaResponse,
     RecommenderTitle,
     SecurityVerifyRequest,
 )
-from app.services.trust import calc_title_for_score
+from app.services.rating import get_user_rating_quota
+from app.services.trust import calc_badge_tier, calc_title_for_score
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -43,6 +49,66 @@ def _load_profile(sb, user_id: str) -> ProfileResponse:
 async def get_my_profile(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     return _load_profile(sb, user_id)
+
+
+@router.get("/me/rating-quota", response_model=RatingQuotaResponse)
+async def get_my_rating_quota(user_id: str = Depends(get_current_user_id)):
+    sb = get_supabase()
+    quota = get_user_rating_quota(sb, user_id)
+    return RatingQuotaResponse(
+        five_star=FiveStarQuotaInfo(
+            used=quota["five_star"]["used"],
+            max=quota["five_star"]["max"],
+            places=[FiveStarPlaceItem(**p) for p in quota["five_star"]["places"]],
+        ),
+        four_half=FourHalfQuotaInfo(**quota["four_half"]),
+    )
+
+
+@router.get("/ranking", response_model=list[RankingEntry])
+async def get_trust_ranking(
+    limit: int = 50,
+    user_id: str = Depends(get_current_user_id),
+):
+    """신뢰도 랭킹 (공개 프로필 요약)"""
+    sb = get_supabase()
+    capped = min(max(limit, 1), 100)
+    result = (
+        sb.table("profiles")
+        .select("id, display_name, trust_score, residence, selected_title_id, badge_tier")
+        .order("trust_score", desc=True)
+        .order("display_name")
+        .limit(capped)
+        .execute()
+    )
+
+    title_ids = [
+        p["selected_title_id"] for p in result.data if p.get("selected_title_id")
+    ]
+    titles_by_id: dict[int, dict] = {}
+    if title_ids:
+        titles = sb.table("recommender_titles").select("*").in_("id", title_ids).execute()
+        titles_by_id = {t["id"]: t for t in titles.data}
+
+    entries: list[RankingEntry] = []
+    for idx, row in enumerate(result.data, start=1):
+        title_row = titles_by_id.get(row.get("selected_title_id"))
+        selected_title = title_row["title"] if title_row else calc_title_for_score(row.get("trust_score", 0))
+        badge_color = title_row["badge_color"] if title_row else "#94A3B8"
+        entries.append(
+            RankingEntry(
+                rank=idx,
+                user_id=row["id"],
+                display_name=row["display_name"],
+                trust_score=row.get("trust_score") or 0,
+                residence=row["residence"],
+                selected_title=selected_title,
+                badge_color=badge_color,
+                badge_tier=row.get("badge_tier") or calc_badge_tier(row.get("trust_score") or 0),
+                is_me=str(row["id"]) == user_id,
+            )
+        )
+    return entries
 
 
 @router.patch("/me", response_model=ProfileResponse)
