@@ -1,5 +1,5 @@
 -- 방 관리 v2: is_fixed, expire_at, 방 잔디, pg_cron 만료·미사용 삭제
--- 001~005 적용 후 SQL Editor에서 실행하세요.
+-- 001~003 적용 후 SQL Editor에서 실행하세요.
 -- pg_cron: Supabase Dashboard → Database → Extensions → pg_cron 활성화
 
 ALTER TABLE rooms

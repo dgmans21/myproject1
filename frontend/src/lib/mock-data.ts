@@ -158,10 +158,10 @@ export const RECOMMENDER_TITLES = [
   { id: 4, title: "gourmet 큐레이터", min_score: 150, badge_color: "#FBBF24", border_style: "gold" },
   { id: 5, title: "밥구르망", min_score: 300, badge_color: "#2563EB", border_style: "platinum" },
   { id: 6, title: "밥슐령가이드", min_score: 500, badge_color: "#10B981", border_style: "emerald" },
-  { id: 7, title: "다이아 방구석쓰리스타", min_score: 700, badge_color: "#06B6D4", border_style: "diamond" },
-  { id: 8, title: "마스터 한국의 미식家", min_score: 1000, badge_color: "#1E40AF", border_style: "korean_michelin" },
-  { id: 9, title: "전설의 미식왕 그랜드마스터", min_score: 1500, badge_color: "#B45309", border_style: "korean_michelin" },
-  { id: 10, title: "명예 미슐랭 가이드", min_score: 2000, badge_color: "#FFD54F", border_style: "korean_michelin" },
+  { id: 7, title: "다이아 방구석쓰리스타", min_score: 750, badge_color: "#06B6D4", border_style: "diamond" },
+  { id: 8, title: "마스터 한국의 미식家", min_score: 1000, badge_color: "#1E40AF", border_style: "master" },
+  { id: 9, title: "전설의 미식왕 그랜드마스터", min_score: 2000, badge_color: "#B45309", border_style: "grandmaster" },
+  { id: 10, title: "명예 미슐랭 가이드", min_score: 3000, badge_color: "#FFD54F", border_style: "supreme" },
 ] as const;
 
 export const MOCK_RANKING = [

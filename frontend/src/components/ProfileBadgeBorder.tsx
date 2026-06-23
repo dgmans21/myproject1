@@ -8,6 +8,16 @@ const KOREAN_MICHELIN_BORDER =
   "before:pointer-events-none before:absolute before:inset-0 " +
   "before:bg-gradient-to-tr before:from-white/55 before:via-transparent before:to-amber-200/25";
 
+const MASTER_BORDER =
+  "relative overflow-hidden ring-2 ring-blue-500/70 " +
+  "shadow-[0_0_14px_rgba(59,130,246,0.28),inset_0_1px_0_rgba(255,255,255,0.6)] " +
+  "bg-gradient-to-br from-blue-50/50 via-white/20 to-indigo-50/40";
+
+const GRANDMASTER_BORDER =
+  "relative overflow-hidden ring-2 ring-amber-500/75 " +
+  "shadow-[0_0_16px_rgba(234,88,12,0.3),inset_0_1px_0_rgba(255,255,255,0.55)] " +
+  "bg-gradient-to-br from-orange-50/50 via-white/20 to-amber-100/40";
+
 const BORDER_STYLES: Record<string, string> = {
   none: "",
   bronze: "ring-2 ring-amber-600/40 shadow-sm shadow-amber-600/10",
@@ -16,10 +26,10 @@ const BORDER_STYLES: Record<string, string> = {
   platinum: "ring-2 ring-blue-500/60 shadow-md shadow-blue-500/30",
   emerald: "ring-2 ring-emerald-500/55 shadow-md shadow-emerald-500/25",
   diamond: "ring-2 ring-cyan-300/75 shadow-lg shadow-cyan-400/40",
-  korean_michelin: KOREAN_MICHELIN_BORDER,
-  master: KOREAN_MICHELIN_BORDER,
-  grandmaster: KOREAN_MICHELIN_BORDER,
+  master: MASTER_BORDER,
+  grandmaster: GRANDMASTER_BORDER,
   supreme: KOREAN_MICHELIN_BORDER,
+  korean_michelin: KOREAN_MICHELIN_BORDER,
 };
 
 type SparkleVariant = "master" | "grandmaster" | "supreme";
@@ -58,9 +68,9 @@ function resolveBorderKey(borderStyle?: string, badgeTier?: string): string {
   const style = borderStyle?.toLowerCase();
   if (style && BORDER_STYLES[style]) return style;
   const tier = badgeTier?.toLowerCase();
-  if (tier === "master" || tier === "grandmaster" || tier === "supreme") {
-    return "korean_michelin";
-  }
+  if (tier === "supreme" || tier === "korean_michelin") return "supreme";
+  if (tier === "grandmaster") return "grandmaster";
+  if (tier === "master") return "master";
   return tier ?? style ?? "none";
 }
 
