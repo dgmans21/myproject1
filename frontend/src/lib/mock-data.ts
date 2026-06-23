@@ -1,4 +1,5 @@
 /** API 미연결 시 UI 미리보기용 목 데이터 (봇 시드 금지 — 데모용 최소 데이터만) */
+import { SOCIAL_POINT_TITLES } from "./social-points";
 export const MOCK_ROOMS = [
   {
     id: "demo-room-1",
@@ -6,8 +7,10 @@ export const MOCK_ROOMS = [
     description: "매주 토요일 만나는 친구들",
     room_type: "REGULAR" as const,
     room_status: "ACTIVE" as const,
+    is_fixed: true,
     purpose: "정기 모임",
     member_count: 5,
+    last_activity_at: "2026-06-20T10:00:00Z",
     created_at: "2026-06-01T10:00:00Z",
   },
   {
@@ -16,9 +19,52 @@ export const MOCK_ROOMS = [
     description: "팀 회식 일정 조율",
     room_type: "ONE_TIME" as const,
     room_status: "ACTIVE" as const,
+    is_fixed: false,
+    expire_at: "2026-12-31T23:59:59Z",
     purpose: "회식",
     member_count: 8,
+    last_activity_at: "2026-06-18T14:00:00Z",
     created_at: "2026-06-18T14:00:00Z",
+  },
+];
+
+export const MOCK_ROOM_HEATMAP = [
+  { activity_on: "2026-06-01", event_count: 1 },
+  { activity_on: "2026-06-08", event_count: 2 },
+  { activity_on: "2026-06-15", event_count: 1 },
+  { activity_on: "2026-06-20", event_count: 3 },
+];
+
+export const MOCK_ROOM_MEMBERS = [
+  {
+    user_id: "demo-user",
+    display_name: "데모 사용자",
+    role: "OWNER",
+    social_points: 420,
+    social_title: "모임 요정",
+    social_badge_color: "#2DD4BF",
+    mbti_types: ["ENFP", "ENTP"],
+    is_me: true,
+  },
+  {
+    user_id: "demo-member-2",
+    display_name: "친구 A",
+    role: "MEMBER",
+    social_points: 150,
+    social_title: "약속 지킴이",
+    social_badge_color: "#60A5FA",
+    mbti_types: ["ISTJ"],
+    is_me: false,
+  },
+  {
+    user_id: "demo-member-3",
+    display_name: "친구 B",
+    role: "MEMBER",
+    social_points: 820,
+    social_title: "인싸 새싹",
+    social_badge_color: "#6366F1",
+    mbti_types: ["INFP"],
+    is_me: false,
   },
 ];
 
@@ -41,11 +87,11 @@ export const MOCK_APPOINTMENTS = [
   {
     id: "demo-apt-3",
     room_id: "demo-room-2",
-    title: "팀 회식",
-    description: "삼겹살 어때요?",
+    title: "강남역 불금 모임",
+    description: "2차 투표로 확정된 장소에서 만나요",
     status: "confirmed" as const,
-    confirmed_date: "2026-06-28",
-    confirmed_time: "18:00:00",
+    confirmed_date: "2026-06-22",
+    confirmed_time: "19:00:00",
     confirmed_place_id: "demo-place-1",
     created_at: "2026-06-12T09:00:00Z",
   },
@@ -66,10 +112,10 @@ export const MOCK_TIME_SUMMARY = [
 export const MOCK_PLACES = [
   {
     id: "demo-place-1",
-    name: "을지로 골목식당",
-    address: "서울 중구 을지로3가",
-    lat: 37.5665,
-    lng: 126.991,
+    name: "강남역 한우곱창",
+    address: "서울 강남구 강남대로 396 (강남역 인근)",
+    lat: 37.4979,
+    lng: 127.0276,
     category: "한식",
     tier: "gold" as const,
     avg_rating: 4.3,
@@ -201,12 +247,17 @@ export const MOCK_PROFILE = {
   home_lat: 37.4979,
   home_lng: 127.0276,
   trust_score: 35,
+  social_points: 420,
   badge_tier: "SILVER" as const,
   role: "USER" as const,
   selected_title_id: 3,
   selected_title: "미식 가이드",
+  selected_social_title_id: 4,
+  selected_social_title: "모임 요정",
+  mbti_types: ["ENFP", "ENTP"],
   places_adopted_count: 4,
   available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 35),
+  available_social_titles: SOCIAL_POINT_TITLES.filter((t) => t.min_points <= 420),
 };
 
 export const MOCK_HEATMAP = [
@@ -220,8 +271,34 @@ export const MOCK_SETTLEMENT = {
   sense_king_user_id: "demo-user",
   sense_king_name: "데모 사용자",
   sense_king_adopted_count: 4,
-  pro_traveler_user_id: "demo-user-2",
-  pro_traveler_name: "멀리서 온 친구",
-  pro_travel_duration_minutes: 52,
-  pro_travel_distance_meters: 18500,
+  pro_traveler_user_id: "demo-member-3",
+  pro_traveler_name: "친구 B",
+  pro_travel_duration_minutes: 62,
+  pro_travel_distance_meters: 28500,
 };
+
+/** 브리핑 mock: 멤버별 출발지 라벨·좌표·확정 시 기록된 이동시간(분) */
+export const MOCK_MEMBER_BRIEFING = {
+  "demo-user": { origin_label: "홍대입구", lat: 37.557527, lng: 126.9245, duration_minutes: 35 },
+  "demo-member-2": { origin_label: "수원시청", lat: 37.263572, lng: 127.0286, duration_minutes: 48 },
+  "demo-member-3": { origin_label: "인천터미널", lat: 37.4482, lng: 126.6535, duration_minutes: 62 },
+} as const;
+
+export const MOCK_BRIEFING_COMMENTS = [
+  {
+    id: "bc-1",
+    user_id: "demo-user",
+    display_name: "데모 사용자",
+    body: "나 지금 신도림역 지나는 중! 생각보다 차 안 막히네",
+    created_at: "2026-06-22T18:10:00+09:00",
+    is_me: true,
+  },
+  {
+    id: "bc-2",
+    user_id: "demo-member-2",
+    display_name: "친구 A",
+    body: "퇴근이 좀 늦음 ㅠㅠ 15분 정도 늦을 것 같아 미안!",
+    created_at: "2026-06-22T18:15:00+09:00",
+    is_me: false,
+  },
+];

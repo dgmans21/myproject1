@@ -15,8 +15,10 @@ from app.models.schemas import (
     RatingQuotaResponse,
     RecommenderTitle,
     SecurityVerifyRequest,
+    SocialPointTitle,
 )
 from app.services.rating import get_user_rating_quota
+from app.services.social_points import calc_social_title_for_points, validate_mbti_types
 from app.services.trust import calc_badge_tier, calc_title_for_score
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -30,7 +32,11 @@ def _load_profile(sb, user_id: str) -> ProfileResponse:
     titles_result = sb.table("recommender_titles").select("*").order("min_score").execute()
     available = [RecommenderTitle(**t) for t in titles_result.data]
 
+    social_result = sb.table("social_point_titles").select("*").order("min_points").execute()
+    social_available = [SocialPointTitle(**t) for t in social_result.data]
+
     data = result.data
+    points = data.get("social_points") or 0
     selected_title = None
     if data.get("selected_title_id"):
         match = next((t for t in available if t.id == data["selected_title_id"]), None)
@@ -38,10 +44,20 @@ def _load_profile(sb, user_id: str) -> ProfileResponse:
     else:
         selected_title = calc_title_for_score(data.get("trust_score", 0))
 
+    selected_social_title = None
+    if data.get("selected_social_title_id"):
+        sm = next((t for t in social_available if t.id == data["selected_social_title_id"]), None)
+        selected_social_title = sm.title if sm else calc_social_title_for_points(points)
+    else:
+        selected_social_title = calc_social_title_for_points(points)
+
     return ProfileResponse(
         **data,
+        mbti_types=data.get("mbti_types") or [],
         selected_title=selected_title,
+        selected_social_title=selected_social_title,
         available_titles=[t for t in available if t.min_score <= (data.get("trust_score") or 0)],
+        available_social_titles=[t for t in social_available if t.min_points <= points],
     )
 
 
@@ -130,6 +146,24 @@ async def update_my_profile(
         )
         if not title.data or title.data["min_score"] > (profile.data["trust_score"] or 0):
             raise HTTPException(status_code=400, detail="해당 칭호를 사용할 수 없습니다")
+
+    if "selected_social_title_id" in update_data:
+        profile = sb.table("profiles").select("social_points").eq("id", user_id).single().execute()
+        title = (
+            sb.table("social_point_titles")
+            .select("min_points")
+            .eq("id", update_data["selected_social_title_id"])
+            .single()
+            .execute()
+        )
+        if not title.data or title.data["min_points"] > (profile.data.get("social_points") or 0):
+            raise HTTPException(status_code=400, detail="해당 소셜 칭호를 사용할 수 없습니다")
+
+    if "mbti_types" in update_data and update_data["mbti_types"] is not None:
+        try:
+            update_data["mbti_types"] = validate_mbti_types(update_data["mbti_types"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     if not update_data:
         raise HTTPException(status_code=400, detail="수정할 항목이 없습니다")

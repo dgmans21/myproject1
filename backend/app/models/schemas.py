@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from enum import Enum
 from uuid import UUID
 
@@ -48,6 +48,14 @@ class RecommendationVoteType(str, Enum):
     NOT_RECOMMEND = "NOT_RECOMMEND"
 
 
+class PraiseSticker(str, Enum):
+    PUNCTUAL = "PUNCTUAL"
+    MOOD_MAKER = "MOOD_MAKER"
+    GOOD_LISTENER = "GOOD_LISTENER"
+    TEAM_PLAYER = "TEAM_PLAYER"
+    LIFE_OF_PARTY = "LIFE_OF_PARTY"
+
+
 class ProfileBadgeTier(str, Enum):
     NONE = "NONE"
     BRONZE = "BRONZE"
@@ -64,13 +72,14 @@ class ProfileBadgeTier(str, Enum):
 # --- Profile ---
 class ProfileUpdate(BaseModel):
     display_name: str | None = None
-    avatar_url: str | None = None
     residence: str | None = None
     age_group: AgeGroup | None = None
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
     selected_title_id: int | None = None
+    selected_social_title_id: int | None = None
+    mbti_types: list[str] | None = Field(default=None, max_length=2)
 
 
 class RecommenderTitle(BaseModel):
@@ -81,22 +90,34 @@ class RecommenderTitle(BaseModel):
     border_style: str = "none"
 
 
+class SocialPointTitle(BaseModel):
+    id: int
+    title: str
+    min_points: int
+    badge_color: str
+    border_style: str = "none"
+
+
 class ProfileResponse(BaseModel):
     id: UUID
     display_name: str
     age_group: AgeGroup
     residence: str
-    avatar_url: str | None = None
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
     trust_score: int = 0
+    social_points: int = 0
     badge_tier: ProfileBadgeTier = ProfileBadgeTier.NONE
     role: UserRole = UserRole.USER
     selected_title_id: int | None = None
     selected_title: str | None = None
+    selected_social_title_id: int | None = None
+    selected_social_title: str | None = None
+    mbti_types: list[str] = []
     places_adopted_count: int = 0
     available_titles: list[RecommenderTitle] = []
+    available_social_titles: list[SocialPointTitle] = []
 
 
 class AttendanceHeatmapDay(BaseModel):
@@ -126,12 +147,20 @@ class RoomCreate(BaseModel):
     description: str | None = None
     purpose: str | None = None
     room_type: RoomType = RoomType.ONE_TIME
+    """임시방(ONE_TIME)일 때 필수. 날짜 단위 만료(해당일 23:59 UTC)."""
+    expire_date: date | None = None
 
 
 class RoomUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = None
     purpose: str | None = None
+    expire_date: date | None = None
+
+
+class RoomActivityDay(BaseModel):
+    activity_on: date
+    event_count: int
 
 
 class RoomResponse(BaseModel):
@@ -141,6 +170,9 @@ class RoomResponse(BaseModel):
     room_type: RoomType
     room_status: RoomStatus = RoomStatus.ACTIVE
     purpose: str | None = None
+    is_fixed: bool = False
+    expire_at: str | None = None
+    last_activity_at: str | None = None
     member_count: int = 0
     created_at: str
 
@@ -151,6 +183,43 @@ class RoomInviteRequest(BaseModel):
 
 class RoomMemberAction(BaseModel):
     user_id: UUID
+
+
+class RoomMemberSummary(BaseModel):
+    user_id: UUID
+    display_name: str
+    role: str
+    social_points: int = 0
+    social_title: str | None = None
+    social_badge_color: str | None = None
+    mbti_types: list[str] = []
+    is_me: bool = False
+
+
+class PraiseVoteCreate(BaseModel):
+    target_user_id: UUID
+    sticker: PraiseSticker
+
+
+class PraiseVoteSent(BaseModel):
+    target_user_id: UUID
+    sticker: PraiseSticker
+    points_awarded: int
+
+
+class PraiseVotePendingTarget(BaseModel):
+    user_id: UUID
+    display_name: str
+
+
+class PraiseVoteStatusResponse(BaseModel):
+    my_votes: list[PraiseVoteSent]
+    pending_targets: list[PraiseVotePendingTarget]
+    points_per_vote: int = 5
+
+
+class TravelRewardCreate(BaseModel):
+    target_user_id: UUID
 
 
 # --- Appointments ---
@@ -276,3 +345,50 @@ class TravelTimeResponse(BaseModel):
     duration_minutes: int
     distance_meters: int
     route_summary: str
+
+
+class DepartureStatus(str, Enum):
+    NOT_DEPARTED = "NOT_DEPARTED"
+    EN_ROUTE = "EN_ROUTE"
+
+
+class AppointmentCommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=500)
+
+
+class AppointmentCommentResponse(BaseModel):
+    id: str
+    user_id: str
+    display_name: str
+    body: str
+    created_at: datetime
+    is_me: bool = False
+
+
+class MemberBriefingStatus(BaseModel):
+    user_id: str
+    display_name: str
+    origin_label: str
+    duration_minutes: int | None = None
+    distance_meters: int | None = None
+    estimated_arrival: str | None = None
+    punctuality: str = "unknown"
+    departure_status: DepartureStatus = DepartureStatus.NOT_DEPARTED
+    is_me: bool = False
+
+
+class AppointmentBriefingResponse(BaseModel):
+    appointment_id: str
+    title: str
+    confirmed_date: date
+    confirmed_time: time
+    place_name: str
+    place_address: str
+    minutes_until_start: int
+    meeting_ended: bool
+    members: list[MemberBriefingStatus]
+    comments: list[AppointmentCommentResponse]
+
+
+class DepartureStatusUpdate(BaseModel):
+    status: DepartureStatus

@@ -8,7 +8,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { VoteMonthCalendar } from "@/components/VoteMonthCalendar";
 import { PlaceVotePanel } from "@/components/PlaceVotePanel";
-import { AppointmentOutputPanel } from "@/components/AppointmentOutputPanel";
+import { AppointmentBriefingPanel } from "@/components/AppointmentBriefingPanel";
 import {
   api,
   Appointment,
@@ -35,6 +35,7 @@ export default function AppointmentPage() {
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [selectedSlots, setSelectedSlots] = useState<Map<string, number>>(new Map());
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [isRoomOwner, setIsRoomOwner] = useState(false);
 
   const load = async () => {
     if (!appointmentId) return;
@@ -73,6 +74,13 @@ export default function AppointmentPage() {
   }, []);
 
   useEffect(() => { load(); }, [appointmentId]);
+
+  useEffect(() => {
+    if (!groupId) return;
+    api.rooms.members(groupId).then((members) => {
+      setIsRoomOwner(members.some((m) => m.is_me && m.role === "OWNER"));
+    }).catch(() => {});
+  }, [groupId]);
 
   const toggleDate = (d: string) => {
     setSelectedDates((prev) => {
@@ -129,18 +137,25 @@ export default function AppointmentPage() {
           <ArrowLeft className="h-4 w-4" /> 방으로
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">{appointment.title}</h1>
-          <Badge variant="primary">{STATUS_LABELS[appointment.status]}</Badge>
+          {appointment.status === "confirmed" ? (
+            <p className="mt-1 text-sm text-muted">확정된 약속 · 당일 브리핑</p>
+          ) : (
+            <Badge className="mt-2" variant="primary">
+              {STATUS_LABELS[appointment.status]}
+            </Badge>
+          )}
         </div>
 
         {appointment.status === "confirmed" && (
           <div className="mt-6">
-            <AppointmentOutputPanel
+            <AppointmentBriefingPanel
+              roomId={groupId!}
               appointment={appointment}
               place={confirmedPlace}
               settlement={settlement}
-              origin={origin}
+              isRoomOwner={isRoomOwner}
             />
           </div>
         )}

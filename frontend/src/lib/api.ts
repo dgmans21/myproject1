@@ -1,14 +1,24 @@
 import {
   MOCK_APPOINTMENTS,
+  MOCK_BRIEFING_COMMENTS,
   MOCK_DATE_SUMMARY,
   MOCK_HEATMAP,
+  MOCK_MEMBER_BRIEFING,
   MOCK_PLACES,
   MOCK_PROFILE,
   MOCK_RANKING,
+  MOCK_ROOM_HEATMAP,
+  MOCK_ROOM_MEMBERS,
   MOCK_ROOMS,
   MOCK_SETTLEMENT,
   MOCK_TIME_SUMMARY,
 } from "./mock-data";
+import {
+  isMeetingEnded,
+  minutesUntilAppointment,
+  punctualityStatus,
+} from "./appointment-time";
+import { SOCIAL_POINT_TITLES } from "./social-points";
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
@@ -27,6 +37,118 @@ let mockProfile = { ...MOCK_PROFILE } as Profile;
 let mockUserRatings: Record<string, number> = {};
 let mockFourHalfUsed = 0;
 let mockFourHalfMonth = currentMonthYear();
+/** praise votes: key `${roomId}:${aptId}:${voterId}` -> targetUserId */
+let mockPraiseVotes: Record<string, Record<string, string>> = {};
+let mockTravelRewards: Record<string, string> = {};
+let mockMemberPoints: Record<string, number> = {
+  "demo-user": 420,
+  "demo-member-2": 150,
+  "demo-member-3": 820,
+};
+let mockBriefingComments: Record<string, AppointmentComment[]> = {
+  "demo-apt-3": MOCK_BRIEFING_COMMENTS.map((c) => ({ ...c })),
+};
+let mockDepartureStatus: Record<string, Record<string, DepartureStatus>> = {
+  "demo-apt-3": {
+    "demo-user": "NOT_DEPARTED",
+    "demo-member-2": "EN_ROUTE",
+    "demo-member-3": "NOT_DEPARTED",
+  },
+};
+let mockConfirmTravel: Record<
+  string,
+  Record<string, { duration_minutes: number; distance_meters: number }>
+> = {
+  "demo-apt-3": Object.fromEntries(
+    Object.entries(MOCK_MEMBER_BRIEFING).map(([uid, v]) => [
+      uid,
+      { duration_minutes: v.duration_minutes, distance_meters: v.duration_minutes * 420 },
+    ])
+  ),
+};
+
+function localDateStr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** 데모 브리핑 약속: 항상 '오늘(또는 내일) 19:00'으로 맞춰 입력 UI를 테스트 가능하게 */
+function refreshDemoBriefingAppointment() {
+  const apt = mockAppointments.find((a) => a.id === "demo-apt-3");
+  if (!apt || apt.status !== "confirmed") return;
+
+  const now = new Date();
+  let meeting = new Date(now);
+  meeting.setHours(19, 0, 0, 0);
+  const end = new Date(meeting.getTime() + 3 * 60 * 60 * 1000);
+  if (now >= end) {
+    meeting.setDate(meeting.getDate() + 1);
+  }
+  apt.confirmed_date = localDateStr(meeting);
+  apt.confirmed_time = "19:00:00";
+}
+
+function seedConfirmTravelLogs(appointmentId: string) {
+  mockConfirmTravel[appointmentId] = Object.fromEntries(
+    Object.entries(MOCK_MEMBER_BRIEFING).map(([uid, v]) => [
+      uid,
+      { duration_minutes: v.duration_minutes, distance_meters: v.duration_minutes * 420 },
+    ])
+  );
+}
+
+function buildMockBriefing(appointmentId: string): AppointmentBriefing {
+  if (appointmentId === "demo-apt-3") refreshDemoBriefingAppointment();
+  const apt = mockAppointments.find((a) => a.id === appointmentId);
+  if (!apt?.confirmed_date || !apt.confirmed_time) {
+    throw new Error("확정된 약속만 브리핑을 조회할 수 있습니다");
+  }
+  const place = mockPlaces.find((p) => p.id === apt.confirmed_place_id);
+  const travel = mockConfirmTravel[appointmentId] ?? {};
+  const departures = mockDepartureStatus[appointmentId] ?? {};
+
+  const members: MemberBriefingStatus[] = MOCK_ROOM_MEMBERS.map((m) => {
+    const origin = MOCK_MEMBER_BRIEFING[m.user_id as keyof typeof MOCK_MEMBER_BRIEFING];
+    const dep = departures[m.user_id] ?? "NOT_DEPARTED";
+    const duration = travel[m.user_id]?.duration_minutes ?? origin?.duration_minutes;
+    const departed = dep === "EN_ROUTE";
+    let estimated_arrival: string | undefined;
+    if (departed && duration != null) {
+      const eta = new Date(Date.now() + duration * 60000);
+      estimated_arrival = eta.toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    }
+    return {
+      user_id: m.user_id,
+      display_name: m.display_name,
+      origin_label: origin?.origin_label ?? "출발지 미등록",
+      duration_minutes: duration,
+      distance_meters: travel[m.user_id]?.distance_meters,
+      estimated_arrival,
+      punctuality: punctualityStatus(apt.confirmed_date!, apt.confirmed_time!, duration ?? 0, departed),
+      departure_status: dep,
+      is_me: m.is_me,
+    };
+  });
+
+  return {
+    appointment_id: appointmentId,
+    title: apt.title,
+    confirmed_date: apt.confirmed_date,
+    confirmed_time: apt.confirmed_time,
+    place_name: place?.name ?? "",
+    place_address: place?.address ?? "",
+    minutes_until_start: minutesUntilAppointment(apt.confirmed_date, apt.confirmed_time),
+    meeting_ended: isMeetingEnded(apt.confirmed_date, apt.confirmed_time),
+    members,
+    comments: mockBriefingComments[appointmentId] ?? [],
+  };
+}
 
 function syncFourHalfMonth() {
   const month = currentMonthYear();
@@ -134,7 +256,14 @@ export const api = {
     },
     update: async (data: Partial<Profile>) => {
       await delay();
+      if (data.mbti_types && data.mbti_types.length > 2) {
+        throw new Error("MBTI는 최대 2개까지 선택할 수 있습니다");
+      }
       mockProfile = { ...mockProfile, ...data };
+      if (data.selected_social_title_id) {
+        const t = SOCIAL_POINT_TITLES.find((x) => x.id === data.selected_social_title_id);
+        if (t) mockProfile.selected_social_title = t.title;
+      }
       return mockProfile;
     },
     attendanceHeatmap: async () => {
@@ -154,8 +283,19 @@ export const api = {
       if (!r) throw new Error("방을 찾을 수 없습니다");
       return r;
     },
+    activityHeatmap: async (_id: string) => {
+      await delay();
+      return MOCK_ROOM_HEATMAP.map((d) => ({
+        activity_on: d.activity_on,
+        event_count: d.event_count,
+      }));
+    },
     create: async (data: RoomCreate) => {
       await delay();
+      if (data.room_type !== "REGULAR" && !data.expire_date) {
+        throw new Error("임시방은 터트릴 날짜(만료일)를 지정해야 합니다");
+      }
+      const isFixed = data.room_type === "REGULAR";
       const room: Room = {
         id: `demo-room-${Date.now()}`,
         name: data.name,
@@ -163,11 +303,73 @@ export const api = {
         purpose: data.purpose,
         room_type: data.room_type || "ONE_TIME",
         room_status: "ACTIVE",
+        is_fixed: isFixed,
+        expire_at: isFixed
+          ? undefined
+          : `${data.expire_date}T23:59:59Z`,
         member_count: 1,
+        last_activity_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
       };
       mockRooms = [room, ...mockRooms];
       return room;
+    },
+    members: async (_roomId: string) => {
+      await delay();
+      return MOCK_ROOM_MEMBERS.map((m) => ({
+        ...m,
+        social_points: mockMemberPoints[m.user_id] ?? m.social_points,
+      }));
+    },
+    praiseStatus: async (roomId: string, appointmentId: string) => {
+      await delay();
+      const key = `${roomId}:${appointmentId}:${mockProfile.id}`;
+      const sent = mockPraiseVotes[key] ?? {};
+      const my_votes = Object.entries(sent).map(([target_user_id, sticker]) => ({
+        target_user_id,
+        sticker,
+        points_awarded: 5,
+      }));
+      const voted = new Set(Object.keys(sent));
+      return {
+        my_votes,
+        pending_targets: MOCK_ROOM_MEMBERS.filter(
+          (m) => !m.is_me && !voted.has(m.user_id)
+        ).map((m) => ({ user_id: m.user_id, display_name: m.display_name })),
+        points_per_vote: 5,
+      };
+    },
+    submitPraise: async (
+      roomId: string,
+      appointmentId: string,
+      data: { target_user_id: string; sticker: string }
+    ) => {
+      await delay();
+      const key = `${roomId}:${appointmentId}:${mockProfile.id}`;
+      if (!mockPraiseVotes[key]) mockPraiseVotes[key] = {};
+      if (mockPraiseVotes[key][data.target_user_id]) {
+        throw new Error("이미 이 멤버에게 스티커를 보냈습니다");
+      }
+      mockPraiseVotes[key][data.target_user_id] = data.sticker;
+      mockMemberPoints[data.target_user_id] = (mockMemberPoints[data.target_user_id] ?? 0) + 5;
+      if (data.target_user_id === mockProfile.id) {
+        mockProfile.social_points += 5;
+      }
+      return { ok: true, points_awarded: 5 };
+    },
+    travelReward: async (
+      roomId: string,
+      appointmentId: string,
+      targetUserId: string
+    ) => {
+      await delay();
+      const tkey = `${roomId}:${appointmentId}`;
+      if (mockTravelRewards[tkey]) {
+        throw new Error("이 약속의 이동 리워드는 이미 지급되었습니다");
+      }
+      mockTravelRewards[tkey] = targetUserId;
+      mockMemberPoints[targetUserId] = (mockMemberPoints[targetUserId] ?? 0) + 10;
+      return { ok: true, points_awarded: 10 };
     },
     promote: async (id: string) => {
       await delay();
@@ -201,9 +403,10 @@ export const api = {
     },
     get: async (id: string) => {
       await delay();
+      if (id === "demo-apt-3") refreshDemoBriefingAppointment();
       const apt = mockAppointments.find((a) => a.id === id);
       if (!apt) throw new Error("약속을 찾을 수 없습니다");
-      return apt;
+      return { ...apt };
     },
     submitDateVote: async (_id: string, _data: DateVote) => { await delay(); return { ok: true }; },
     dateSummary: async (_id: string) => { await delay(); return MOCK_DATE_SUMMARY as VoteSummary[]; },
@@ -229,7 +432,33 @@ export const api = {
             }
           : a
       );
+      if (placeId) seedConfirmTravelLogs(id);
+      if (!mockBriefingComments[id]) mockBriefingComments[id] = [];
       return { status: "confirmed", date: voteDate, time: voteTime };
+    },
+    briefing: async (id: string) => {
+      await delay();
+      return buildMockBriefing(id);
+    },
+    addComment: async (id: string, body: string) => {
+      await delay();
+      const comment: AppointmentComment = {
+        id: `bc-${Date.now()}`,
+        user_id: mockProfile.id,
+        display_name: mockProfile.display_name,
+        body: body.trim(),
+        created_at: new Date().toISOString(),
+        is_me: true,
+      };
+      if (!mockBriefingComments[id]) mockBriefingComments[id] = [];
+      mockBriefingComments[id].push(comment);
+      return comment;
+    },
+    setDepartureStatus: async (id: string, status: DepartureStatus) => {
+      await delay();
+      if (!mockDepartureStatus[id]) mockDepartureStatus[id] = {};
+      mockDepartureStatus[id][mockProfile.id] = status;
+      return { ok: true, status };
     },
     settlement: async (_id: string) => {
       await delay();
@@ -294,16 +523,24 @@ export interface RecommenderTitle {
   border_style: string;
 }
 
+export interface SocialPointTitle {
+  id: number;
+  title: string;
+  min_points: number;
+  badge_color: string;
+  border_style: string;
+}
+
 export interface Profile {
   id: string;
   display_name: string;
   age_group: "TEENS" | "TWENTIES" | "THIRTIES" | "FORTIES" | "FIFTIES_PLUS";
   residence: string;
-  avatar_url?: string;
   home_address?: string;
   home_lat?: number;
   home_lng?: number;
   trust_score: number;
+  social_points: number;
   badge_tier:
     | "NONE"
     | "BRONZE"
@@ -318,8 +555,12 @@ export interface Profile {
   role: "USER" | "ADMIN";
   selected_title_id?: number;
   selected_title?: string;
+  selected_social_title_id?: number;
+  selected_social_title?: string;
+  mbti_types: string[];
   places_adopted_count: number;
   available_titles?: RecommenderTitle[];
+  available_social_titles?: SocialPointTitle[];
 }
 
 export interface Room {
@@ -329,6 +570,9 @@ export interface Room {
   room_type: "ONE_TIME" | "REGULAR";
   room_status: "ACTIVE" | "ARCHIVED";
   purpose?: string;
+  is_fixed: boolean;
+  expire_at?: string;
+  last_activity_at?: string;
   member_count: number;
   created_at: string;
 }
@@ -338,7 +582,37 @@ export interface RoomCreate {
   description?: string;
   purpose?: string;
   room_type?: "ONE_TIME" | "REGULAR";
+  expire_date?: string;
 }
+
+export interface RoomActivityDay {
+  activity_on: string;
+  event_count: number;
+}
+
+export interface RoomMember {
+  user_id: string;
+  display_name: string;
+  role: string;
+  social_points: number;
+  social_title?: string;
+  social_badge_color?: string;
+  mbti_types: string[];
+  is_me: boolean;
+}
+
+export interface PraiseVoteStatus {
+  my_votes: { target_user_id: string; sticker: string; points_awarded: number }[];
+  pending_targets: { user_id: string; display_name: string }[];
+  points_per_vote: number;
+}
+
+export type PraiseSticker =
+  | "PUNCTUAL"
+  | "MOOD_MAKER"
+  | "GOOD_LISTENER"
+  | "TEAM_PLAYER"
+  | "LIFE_OF_PARTY";
 
 export interface TravelTimeRequest {
   origin_lat: number;
@@ -406,6 +680,42 @@ export interface MeetingSettlement {
   pro_traveler_name?: string;
   pro_travel_duration_minutes?: number;
   pro_travel_distance_meters?: number;
+}
+
+export type DepartureStatus = "NOT_DEPARTED" | "EN_ROUTE";
+
+export interface AppointmentComment {
+  id: string;
+  user_id: string;
+  display_name: string;
+  body: string;
+  created_at: string;
+  is_me?: boolean;
+}
+
+export interface MemberBriefingStatus {
+  user_id: string;
+  display_name: string;
+  origin_label: string;
+  duration_minutes?: number;
+  distance_meters?: number;
+  estimated_arrival?: string;
+  punctuality: "ok" | "risk" | "late" | "unknown";
+  departure_status: DepartureStatus;
+  is_me?: boolean;
+}
+
+export interface AppointmentBriefing {
+  appointment_id: string;
+  title: string;
+  confirmed_date: string;
+  confirmed_time: string;
+  place_name: string;
+  place_address: string;
+  minutes_until_start: number;
+  meeting_ended: boolean;
+  members: MemberBriefingStatus[];
+  comments: AppointmentComment[];
 }
 
 export interface Place {

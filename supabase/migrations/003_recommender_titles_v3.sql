@@ -17,10 +17,10 @@ INSERT INTO recommender_titles (title, min_score, badge_color, border_style) VAL
   ('gourmet 큐레이터', 150, '#FBBF24', 'gold'),
   ('밥구르망', 300, '#2563EB', 'platinum'),
   ('밥슐령가이드', 500, '#10B981', 'emerald'),
-  ('다이아 방구석쓰리스타', 700, '#06B6D4', 'diamond'),
-  ('마스터 한국의 미식家', 1000, '#1E40AF', 'korean_michelin'),
-  ('전설의 미식왕 그랜드마스터', 1500, '#B45309', 'korean_michelin'),
-  ('명예 미슐랭 가이드', 2000, '#FFD54F', 'korean_michelin');
+  ('다이아-방구석쓰리스타', 800, '#06B6D4', 'diamond'),
+  ('마스터 한국의 미식家', 1500, '#1E40AF', 'korean_michelin'),
+  ('전설의 미식왕 그랜드마스터', 2000, '#B45309', 'legendary_gourmet_king'),
+  ('명예 미슐랭 가이드', 3000, '#FFD54F', 'korean_michelin');
 
 UPDATE profiles
 SET selected_title_id = (SELECT id FROM recommender_titles WHERE min_score = 0 LIMIT 1)

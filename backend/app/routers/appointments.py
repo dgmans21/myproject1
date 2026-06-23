@@ -6,14 +6,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_current_user_id, get_debug_unlimited_flag
 from app.database import get_supabase
 from app.models.schemas import (
+    AppointmentBriefingResponse,
+    AppointmentCommentCreate,
+    AppointmentCommentResponse,
     AppointmentCreate,
     AppointmentResponse,
     AppointmentStatus,
     DateVoteCreate,
+    DepartureStatus,
+    DepartureStatusUpdate,
     MeetingSettlement,
     TimeSlotSummary,
     TimeVoteCreate,
     VoteSummary,
+)
+from app.services.briefing import (
+    build_briefing,
+    post_comment,
+    record_confirm_travel_logs,
+    set_departure_status,
 )
 from app.routers.rooms import _ensure_member
 
@@ -243,7 +254,47 @@ async def confirm_appointment(
                 "places_adopted_count": (profile.data["places_adopted_count"] or 0) + 1,
             }).eq("id", recommender_id).execute()
 
+        await record_confirm_travel_logs(sb, str(appointment_id), str(place_id), apt["room_id"])
+
     return {"status": "confirmed", "date": vote_date, "time": vote_time}
+
+
+@router.get("/{appointment_id}/briefing", response_model=AppointmentBriefingResponse)
+async def get_appointment_briefing(appointment_id: UUID, user_id: str = Depends(get_current_user_id)):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    try:
+        return await build_briefing(sb, str(appointment_id), user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/{appointment_id}/comments", response_model=AppointmentCommentResponse, status_code=201)
+async def add_appointment_comment(
+    appointment_id: UUID,
+    body: AppointmentCommentCreate,
+    user_id: str = Depends(get_current_user_id),
+):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    if apt["status"] != AppointmentStatus.confirmed.value:
+        raise HTTPException(status_code=400, detail="확정된 약속에만 댓글을 남길 수 있습니다")
+    return await post_comment(sb, str(appointment_id), user_id, body)
+
+
+@router.patch("/{appointment_id}/departure-status")
+async def update_departure_status(
+    appointment_id: UUID,
+    body: DepartureStatusUpdate,
+    user_id: str = Depends(get_current_user_id),
+):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    set_departure_status(sb, str(appointment_id), user_id, body.status)
+    return {"ok": True, "status": body.status.value}
 
 
 @router.get("/{appointment_id}/settlement", response_model=MeetingSettlement)

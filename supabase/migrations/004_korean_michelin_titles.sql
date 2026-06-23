@@ -5,8 +5,8 @@ SET border_style = 'korean_michelin'
 WHERE min_score >= 1000;
 
 UPDATE recommender_titles
-SET title = '전설의 미식왕 그랜드마스터'
-WHERE min_score = 1500 AND title = '전설의 미식왕';
+SET title = '전설의 미식왕-그랜드마스터'
+WHERE min_score = 1500 AND title = 'legendary_gourmet_king';
 
 UPDATE recommender_titles
 SET

@@ -5,59 +5,24 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Input, Textarea } from "@/components/ui/Input";
-import { api, Room, ROOM_TYPE_LABELS } from "@/lib/api";
-import { Plus, Users, Zap, Crown, Trash2 } from "lucide-react";
+import { RoomCreateForm } from "@/components/RoomCreateForm";
+import { api, ROOM_TYPE_LABELS } from "@/lib/api";
+import { useRoomStore } from "@/stores/room-store";
+import { Plus, Users, Crown, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupsPage() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { rooms, loading, fetchRooms, updateRoom, removeRoom } = useRoomStore();
   const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [creating, setCreating] = useState(false);
 
-  const loadRooms = async () => {
-    try {
-      const data = await api.rooms.list();
-      setRooms(data);
-    } catch {
-      /* API not connected */
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { loadRooms(); }, []);
-
-  const handleCreate = async (type: "ONE_TIME" | "REGULAR") => {
-    if (!name.trim()) return;
-    setCreating(true);
-    try {
-      const room = await api.rooms.create({
-        name,
-        description: description || undefined,
-        purpose: purpose || undefined,
-        room_type: type,
-      });
-      setRooms((prev) => [room, ...prev]);
-      setShowCreate(false);
-      setName("");
-      setDescription("");
-      setPurpose("");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "방 생성 실패");
-    } finally {
-      setCreating(false);
-    }
-  };
+  useEffect(() => {
+    fetchRooms().catch(() => {});
+  }, [fetchRooms]);
 
   const handlePromote = async (id: string) => {
     try {
       const updated = await api.rooms.promote(id);
-      setRooms((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      updateRoom(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : "승격 실패");
     }
@@ -67,7 +32,7 @@ export default function GroupsPage() {
     if (!confirm("한 번 만나기 방을 삭제하시겠습니까?")) return;
     try {
       await api.rooms.delete(id);
-      setRooms((prev) => prev.filter((r) => r.id !== id));
+      removeRoom(id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "삭제 실패");
     }
@@ -80,7 +45,7 @@ export default function GroupsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">방</h1>
-            <p className="mt-1 text-muted">한 번 만나기 · 정식 그룹 · 3개월 약속 없으면 보관</p>
+            <p className="mt-1 text-muted">임시방 · 고정방 · 3개월 약속 없으면 보관</p>
           </div>
           <Button onClick={() => setShowCreate(!showCreate)}>
             <Plus className="h-4 w-4" />
@@ -88,26 +53,7 @@ export default function GroupsPage() {
           </Button>
         </div>
 
-        {showCreate && (
-          <Card className="mt-6">
-            <CardTitle>방 만들기</CardTitle>
-            <div className="mt-4 space-y-4">
-              <Input label="방 이름" value={name} onChange={(e) => setName(e.target.value)} placeholder="이번 주말 모임" />
-              <Input label="목적" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="저녁 회식, 스터디 등" />
-              <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-              <div className="flex gap-3">
-                <Button onClick={() => handleCreate("ONE_TIME")} disabled={creating} variant="accent">
-                  <Zap className="h-4 w-4" />
-                  한 번 만나기
-                </Button>
-                <Button onClick={() => handleCreate("REGULAR")} disabled={creating}>
-                  <Crown className="h-4 w-4" />
-                  정식 그룹
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
+        {showCreate && <RoomCreateForm onClose={() => setShowCreate(false)} />}
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {loading ? (
@@ -132,6 +78,11 @@ export default function GroupsPage() {
                   </div>
                   <CardTitle className="mt-3">{room.name}</CardTitle>
                   {room.purpose && <CardDescription>{room.purpose}</CardDescription>}
+                  {room.expire_at && (
+                    <p className="mt-2 text-xs text-warm">
+                      만료 {room.expire_at.slice(0, 10)}
+                    </p>
+                  )}
                 </Link>
                 <div className="mt-4 flex gap-2">
                   {room.room_type === "ONE_TIME" && (

@@ -8,16 +8,19 @@ import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
+import { MbtiBadge } from "@/components/MbtiBadge";
+import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { RoomOutputBanner } from "@/components/RoomOutputBanner";
-import { api, Appointment, Room, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
+import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
+import { useRoomStore } from "@/stores/room-store";
 import { Plus, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [room, setRoom] = useState<Room | null>(null);
+  const { currentRoom: room, roomHeatmap, fetchRoom, fetchRoomHeatmap } = useRoomStore();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
+  const [members, setMembers] = useState<RoomMember[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -25,10 +28,16 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    api.rooms.get(id).then(setRoom).catch(() => {});
+    fetchRoom(id).catch(() => {});
+    fetchRoomHeatmap(id).catch(() => {});
     api.appointments.listByRoom(id).then(setAppointments).catch(() => {});
-    api.profiles.attendanceHeatmap().then(setHeatmap).catch(() => {});
-  }, [id]);
+    api.rooms.members(id).then(setMembers).catch(() => {});
+  }, [id, fetchRoom, fetchRoomHeatmap]);
+
+  const heatmapData = roomHeatmap.map((d) => ({
+    date: d.activity_on,
+    count: d.event_count,
+  }));
 
   const handleCreate = async () => {
     if (!title.trim() || !id) return;
@@ -77,10 +86,35 @@ export default function GroupDetailPage() {
 
         <RoomOutputBanner roomId={id!} appointments={appointments} />
 
-        <Card className="mt-6">
-          <CardTitle className="text-base">그룹 약속 잔디</CardTitle>
-          <CalendarHeatmap data={heatmap} className="mt-4" weeks={8} />
-        </Card>
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardTitle className="text-base">방 활동 잔디</CardTitle>
+            <CalendarHeatmap data={heatmapData} className="mt-4" weeks={8} />
+          </Card>
+
+          <Card>
+            <CardTitle className="text-base">멤버</CardTitle>
+            <ul className="mt-4 space-y-3">
+              {members.map((m) => (
+                <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-medium">
+                    {m.display_name}
+                    {m.is_me && <span className="ml-1 text-xs text-muted">(나)</span>}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {m.mbti_types.map((t) => (
+                      <MbtiBadge key={t} type={t} />
+                    ))}
+                    {m.social_title && (
+                      <SocialPointBadge title={m.social_title} badgeColor={m.social_badge_color} />
+                    )}
+                    <span className="text-muted">{m.social_points}P</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
 
         {showCreate && (
           <Card className="mt-6">

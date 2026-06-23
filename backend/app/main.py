@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import appointments, places, profiles, rooms
+from app.routers import appointments, places, profiles, room_votes, rooms
 
 app = FastAPI(
     title="우리지금만나 API",
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(rooms.router, prefix="/api/v1")
+app.include_router(room_votes.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
 app.include_router(places.router, prefix="/api/v1")
 

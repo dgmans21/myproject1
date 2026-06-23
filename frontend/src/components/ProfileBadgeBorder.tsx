@@ -66,7 +66,7 @@ function resolveBorderKey(borderStyle?: string, badgeTier?: string): string {
 
 function resolveSparkleVariant(title: string, badgeColor?: string): SparkleVariant | null {
   const color = badgeColor?.toUpperCase();
-  if (title === "명예 미슐랭 가이드" || color === "#FFD54F") return "supreme";
+  if (title === "명예 미슐랭 가이드" || title === "방구석 미슐랭" || color === "#FFD54F") return "supreme";
   if (title.includes("그랜드마스터") || color === "#B45309") return "grandmaster";
   if (title.includes("마스터 한국의") || color === "#1E40AF") return "master";
   return null;
