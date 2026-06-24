@@ -11,9 +11,10 @@ import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { RoomOutputBanner } from "@/components/RoomOutputBanner";
+import { RoomHostTransferPanel } from "@/components/RoomHostTransferPanel";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { useRoomStore } from "@/stores/room-store";
-import { Plus, Calendar, ArrowLeft } from "lucide-react";
+import { Plus, Calendar, ArrowLeft, Crown } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupDetailPage() {
@@ -26,12 +27,17 @@ export default function GroupDetailPage() {
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const reloadMembers = () => {
+    if (!id) return;
+    api.rooms.members(id).then(setMembers).catch(() => {});
+  };
+
   useEffect(() => {
     if (!id) return;
     fetchRoom(id).catch(() => {});
     fetchRoomHeatmap(id).catch(() => {});
     api.appointments.listByRoom(id).then(setAppointments).catch(() => {});
-    api.rooms.members(id).then(setMembers).catch(() => {});
+    reloadMembers();
   }, [id, fetchRoom, fetchRoomHeatmap]);
 
   const heatmapData = roomHeatmap.map((d) => ({
@@ -49,6 +55,7 @@ export default function GroupDetailPage() {
         description: description || undefined,
       });
       setAppointments((prev) => [apt, ...prev]);
+      reloadMembers();
       setShowCreate(false);
       setTitle("");
       setDescription("");
@@ -86,6 +93,10 @@ export default function GroupDetailPage() {
 
         <RoomOutputBanner roomId={id!} appointments={appointments} />
 
+        <div className="mt-6">
+          <RoomHostTransferPanel roomId={id!} onUpdated={reloadMembers} />
+        </div>
+
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Card>
             <CardTitle className="text-base">방 활동 잔디</CardTitle>
@@ -97,9 +108,14 @@ export default function GroupDetailPage() {
             <ul className="mt-4 space-y-3">
               {members.map((m) => (
                 <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span className="font-medium">
+                  <span className="font-medium flex items-center gap-1.5">
                     {m.display_name}
-                    {m.is_me && <span className="ml-1 text-xs text-muted">(나)</span>}
+                    {m.is_me && <span className="text-xs text-muted">(나)</span>}
+                    {m.role === "OWNER" && (
+                      <Badge variant="warm" className="text-[10px] px-1.5 py-0">
+                        <Crown className="h-3 w-3 mr-0.5" /> 방장
+                      </Badge>
+                    )}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {m.mbti_types.map((t) => (

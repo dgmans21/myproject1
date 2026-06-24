@@ -7,7 +7,7 @@ import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
+import { Input, Textarea } from "@/components/ui/Input";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
@@ -25,6 +25,7 @@ export default function PlacesPage() {
   const [geocoding, setGeocoding] = useState(false);
   const [ratingPlace, setRatingPlace] = useState<string | null>(null);
   const [rating, setRating] = useState(4);
+  const [reviewText, setReviewText] = useState("");
   const [replaceModal, setReplaceModal] = useState<{
     placeId: string;
     placeName: string;
@@ -91,8 +92,13 @@ export default function PlacesPage() {
 
   const submitRating = async (placeId: string, replacePlaceId?: string) => {
     try {
-      await api.places.rate(placeId, { rating, replace_place_id: replacePlaceId });
+      await api.places.rate(placeId, {
+        rating,
+        replace_place_id: replacePlaceId,
+        review: reviewText,
+      });
       setRatingPlace(null);
+      setReviewText("");
       setReplaceModal(null);
       const [updated, q] = await Promise.all([api.places.list(), api.profiles.ratingQuota()]);
       setPlaces(updated);
@@ -120,9 +126,17 @@ export default function PlacesPage() {
   const handleRecommendation = async (placeId: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
     try {
       await api.places.voteRecommendation(placeId, vote);
+      const updated = await api.places.list();
+      setPlaces(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : "투표 실패");
     }
+  };
+
+  const openRating = (place: Place) => {
+    setRatingPlace(place.id);
+    setRating(place.my_rating ?? 4);
+    setReviewText(place.my_review ?? "");
   };
 
   return (
@@ -196,8 +210,11 @@ export default function PlacesPage() {
             </p>
             <p>
               <strong className="text-foreground">4.5점</strong>은 이번 달{" "}
-              {quota ? `${quota.four_half.used}/${quota.four_half.max}회` : "5회"} · 추천/비추천 시
-              추천인 신뢰도 ±1
+              {quota ? `${quota.four_half.used}/${quota.four_half.max}회` : "5회"} (별점 한도)
+            </p>
+            <p>
+              <strong className="text-foreground">추천/비추천</strong>은 별점과 별개 · 장소
+              추천인 신뢰도 ±1 (일일 상한 없음, 장소당 1표)
             </p>
             {quota && (
               <p className="text-xs">
@@ -250,13 +267,27 @@ export default function PlacesPage() {
                 )}
 
                 <div className="mt-3 flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => handleRecommendation(place.id, "RECOMMEND")}>
+                  <Button
+                    size="sm"
+                    variant={place.my_recommendation_vote === "RECOMMEND" ? "primary" : "secondary"}
+                    onClick={() => handleRecommendation(place.id, "RECOMMEND")}
+                  >
                     <ThumbsUp className="h-3.5 w-3.5" /> 추천
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => handleRecommendation(place.id, "NOT_RECOMMEND")}>
-                    <ThumbsDown className="h-3.5 w-3.5" />
+                  <Button
+                    size="sm"
+                    variant={place.my_recommendation_vote === "NOT_RECOMMEND" ? "accent" : "ghost"}
+                    onClick={() => handleRecommendation(place.id, "NOT_RECOMMEND")}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" /> 비추천
                   </Button>
                 </div>
+
+                {place.my_review && (
+                  <p className="mt-3 rounded-lg bg-surface px-3 py-2 text-xs text-muted">
+                    내 리뷰: {place.my_review}
+                  </p>
+                )}
 
                 {ratingPlace === place.id ? (
                   <div className="mt-4 space-y-2">
@@ -271,11 +302,18 @@ export default function PlacesPage() {
                         </button>
                       ))}
                     </div>
+                    <Textarea
+                      label="한줄 리뷰 (선택)"
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      rows={2}
+                      placeholder="분위기, 메뉴 추천 등"
+                    />
                     <Button size="sm" onClick={() => handleRate(place.id)}>평가</Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => setRatingPlace(place.id)}>
-                    <Star className="h-3.5 w-3.5" /> 평가하기
+                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => openRating(place)}>
+                    <Star className="h-3.5 w-3.5" /> {place.my_rating != null ? "평가 수정" : "평가하기"}
                   </Button>
                 )}
               </Card>

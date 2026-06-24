@@ -67,6 +67,61 @@ let mockConfirmTravel: Record<
   ),
 };
 
+type HostTransferPending = {
+  from_user_id: string;
+  from_display_name: string;
+  to_user_id: string;
+  to_display_name: string;
+};
+
+function cloneRoomMembers(roomId: string): RoomMember[] {
+  const base =
+    roomId === "demo-room-2"
+      ? MOCK_ROOM_MEMBERS.map((m) => ({ ...m, role: "MEMBER" }))
+      : MOCK_ROOM_MEMBERS.map((m) => ({ ...m }));
+  return base.map((m) => ({
+    ...m,
+    social_points: mockMemberPoints[m.user_id] ?? m.social_points,
+  }));
+}
+
+let mockRoomMembersState: Record<string, RoomMember[]> = {
+  "demo-room-1": cloneRoomMembers("demo-room-1"),
+  "demo-room-2": cloneRoomMembers("demo-room-2"),
+};
+
+let mockHostTransferPending: Record<string, HostTransferPending> = {};
+let mockRecommendationVotes: Record<string, "RECOMMEND" | "NOT_RECOMMEND"> = {};
+let mockPlaceReviews: Record<string, string> = {};
+
+function getRoomMembers(roomId: string): RoomMember[] {
+  if (!mockRoomMembersState[roomId]) {
+    mockRoomMembersState[roomId] = cloneRoomMembers(roomId);
+  }
+  return mockRoomMembersState[roomId];
+}
+
+function getRoomOwner(members: RoomMember[]): RoomMember | undefined {
+  return members.find((m) => m.role === "OWNER");
+}
+
+function assignOwnerIfMissing(roomId: string, userId: string) {
+  const members = getRoomMembers(roomId);
+  if (getRoomOwner(members)) return;
+  mockRoomMembersState[roomId] = members.map((m) =>
+    m.user_id === userId ? { ...m, role: "OWNER" } : m
+  );
+}
+
+function enrichPlace(p: Place): Place {
+  return {
+    ...p,
+    my_rating: mockUserRatings[p.id],
+    my_review: mockPlaceReviews[p.id],
+    my_recommendation_vote: mockRecommendationVotes[p.id],
+  };
+}
+
 function localDateStr(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -192,7 +247,8 @@ function buildMockRatingQuota(): RatingQuota {
 function applyMockRating(
   placeId: string,
   rating: number,
-  replacePlaceId?: string
+  replacePlaceId?: string,
+  review?: string
 ): void {
   syncFourHalfMonth();
   const oldRating = mockUserRatings[placeId];
@@ -226,6 +282,11 @@ function applyMockRating(
   }
 
   mockUserRatings[placeId] = rating;
+  if (review !== undefined) {
+    const trimmed = review.trim();
+    if (trimmed) mockPlaceReviews[placeId] = trimmed;
+    else delete mockPlaceReviews[placeId];
+  }
   recalcPlaceAvg(placeId, rating, isNew);
 }
 
@@ -312,14 +373,100 @@ export const api = {
         created_at: new Date().toISOString(),
       };
       mockRooms = [room, ...mockRooms];
+      mockRoomMembersState[room.id] = [
+        {
+          user_id: mockProfile.id,
+          display_name: mockProfile.display_name,
+          role: "OWNER",
+          social_points: mockProfile.social_points,
+          social_title: mockProfile.selected_social_title,
+          social_badge_color: "#2DD4BF",
+          mbti_types: [...mockProfile.mbti_types],
+          is_me: true,
+        },
+      ];
       return room;
     },
-    members: async (_roomId: string) => {
+    members: async (roomId: string) => {
       await delay();
-      return MOCK_ROOM_MEMBERS.map((m) => ({
-        ...m,
-        social_points: mockMemberPoints[m.user_id] ?? m.social_points,
-      }));
+      return getRoomMembers(roomId).map((m) => ({ ...m }));
+    },
+    hostTransferStatus: async (roomId: string) => {
+      await delay();
+      const members = getRoomMembers(roomId);
+      const owner = getRoomOwner(members);
+      const pending = mockHostTransferPending[roomId];
+      return {
+        owner_user_id: owner?.user_id ?? null,
+        owner_display_name: owner?.display_name ?? null,
+        is_me_owner: owner?.user_id === mockProfile.id,
+        pending: pending
+          ? {
+              from_user_id: pending.from_user_id,
+              from_display_name: pending.from_display_name,
+              to_user_id: pending.to_user_id,
+              to_display_name: pending.to_display_name,
+              is_for_me: pending.to_user_id === mockProfile.id,
+            }
+          : null,
+        transfer_candidates: members.filter(
+          (m) => m.user_id !== mockProfile.id && m.user_id !== owner?.user_id
+        ),
+      };
+    },
+    requestHostTransfer: async (roomId: string, targetUserId: string) => {
+      await delay();
+      const members = getRoomMembers(roomId);
+      const owner = getRoomOwner(members);
+      if (!owner || owner.user_id !== mockProfile.id) {
+        throw new Error("방장만 인도를 요청할 수 있습니다");
+      }
+      if (mockHostTransferPending[roomId]) {
+        throw new Error("이미 진행 중인 인도 요청이 있습니다");
+      }
+      const target = members.find((m) => m.user_id === targetUserId);
+      if (!target) throw new Error("멤버를 찾을 수 없습니다");
+      if (targetUserId === mockProfile.id) {
+        throw new Error("본인에게는 넘길 수 없습니다");
+      }
+      mockHostTransferPending[roomId] = {
+        from_user_id: mockProfile.id,
+        from_display_name: mockProfile.display_name,
+        to_user_id: targetUserId,
+        to_display_name: target.display_name,
+      };
+      return { ok: true };
+    },
+    respondHostTransfer: async (
+      roomId: string,
+      accept: boolean,
+      options?: { demo?: boolean }
+    ) => {
+      await delay();
+      const pending = mockHostTransferPending[roomId];
+      if (!pending) throw new Error("대기 중인 인도 요청이 없습니다");
+      if (!options?.demo && pending.to_user_id !== mockProfile.id) {
+        throw new Error("인도 대상만 응답할 수 있습니다");
+      }
+      if (accept) {
+        mockRoomMembersState[roomId] = getRoomMembers(roomId).map((m) => {
+          if (m.user_id === pending.from_user_id) return { ...m, role: "MEMBER" };
+          if (m.user_id === pending.to_user_id) return { ...m, role: "OWNER" };
+          return m;
+        });
+      }
+      delete mockHostTransferPending[roomId];
+      return { ok: true, accepted: accept };
+    },
+    cancelHostTransfer: async (roomId: string) => {
+      await delay();
+      const pending = mockHostTransferPending[roomId];
+      if (!pending) throw new Error("취소할 인도 요청이 없습니다");
+      if (pending.from_user_id !== mockProfile.id) {
+        throw new Error("요청한 방장만 취소할 수 있습니다");
+      }
+      delete mockHostTransferPending[roomId];
+      return { ok: true };
     },
     praiseStatus: async (roomId: string, appointmentId: string) => {
       await delay();
@@ -333,7 +480,7 @@ export const api = {
       const voted = new Set(Object.keys(sent));
       return {
         my_votes,
-        pending_targets: MOCK_ROOM_MEMBERS.filter(
+        pending_targets: getRoomMembers(roomId).filter(
           (m) => !m.is_me && !voted.has(m.user_id)
         ).map((m) => ({ user_id: m.user_id, display_name: m.display_name })),
         points_per_vote: 5,
@@ -399,6 +546,7 @@ export const api = {
         created_at: new Date().toISOString(),
       };
       mockAppointments = [apt, ...mockAppointments];
+      assignOwnerIfMissing(data.room_id, mockProfile.id);
       return apt;
     },
     get: async (id: string) => {
@@ -468,13 +616,14 @@ export const api = {
   places: {
     list: async (roomId?: string) => {
       await delay();
-      return roomId ? mockPlaces : mockPlaces;
+      const list = roomId ? mockPlaces : mockPlaces;
+      return list.map(enrichPlace);
     },
     get: async (id: string) => {
       await delay();
       const p = mockPlaces.find((x) => x.id === id);
       if (!p) throw new Error("장소를 찾을 수 없습니다");
-      return p;
+      return enrichPlace(p);
     },
     create: async (data: PlaceCreate) => {
       await delay();
@@ -490,19 +639,24 @@ export const api = {
         rating_count: 0,
       };
       mockPlaces = [place, ...mockPlaces];
-      return place;
+      return enrichPlace(place);
     },
     rate: async (
       id: string,
-      data: { rating: number; replace_place_id?: string }
+      data: { rating: number; replace_place_id?: string; review?: string }
     ) => {
       await delay();
-      applyMockRating(id, data.rating, data.replace_place_id);
+      applyMockRating(id, data.rating, data.replace_place_id, data.review);
       return { ok: true };
     },
-    voteRecommendation: async (_id: string, _vote: "RECOMMEND" | "NOT_RECOMMEND") => {
+    voteRecommendation: async (id: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
       await delay();
-      return { ok: true };
+      if (mockRecommendationVotes[id] === vote) {
+        delete mockRecommendationVotes[id];
+      } else {
+        mockRecommendationVotes[id] = vote;
+      }
+      return { ok: true, my_vote: mockRecommendationVotes[id] ?? null };
     },
     travelTime: async (req: TravelTimeRequest) => {
       await delay();
@@ -599,6 +753,22 @@ export interface RoomMember {
   social_badge_color?: string;
   mbti_types: string[];
   is_me: boolean;
+}
+
+export interface HostTransferPendingInfo {
+  from_user_id: string;
+  from_display_name: string;
+  to_user_id: string;
+  to_display_name: string;
+  is_for_me: boolean;
+}
+
+export interface HostTransferStatus {
+  owner_user_id: string | null;
+  owner_display_name: string | null;
+  is_me_owner: boolean;
+  pending: HostTransferPendingInfo | null;
+  transfer_candidates: { user_id: string; display_name: string }[];
 }
 
 export interface PraiseVoteStatus {
@@ -731,6 +901,9 @@ export interface Place {
   rating_count: number;
   recommender_title?: string;
   past_travel_hint?: string;
+  my_rating?: number;
+  my_review?: string;
+  my_recommendation_vote?: "RECOMMEND" | "NOT_RECOMMEND" | null;
 }
 
 export interface FiveStarPlaceItem {

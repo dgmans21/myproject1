@@ -9,6 +9,7 @@ import { ProfileBadgeBorder, TrustBadge } from "@/components/ProfileBadgeBorder"
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
+import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
 import { api, Profile, RecommenderTitle, SocialPointTitle } from "@/lib/api";
 import { MBTI_OPTIONS } from "@/lib/mbti";
 
@@ -22,7 +23,7 @@ const AGE_LABELS: Record<string, string> = {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [tab, setTab] = useState<"info" | "trust" | "social">("info");
+  const [tab, setTab] = useState<"info" | "decor" | "trust" | "social">("info");
   const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [mbtiDraft, setMbtiDraft] = useState<string[]>([]);
@@ -145,6 +146,7 @@ export default function ProfilePage() {
         <div className="mt-6 flex gap-2 border-b border-border overflow-x-auto">
           {([
             ["info", "프로필"],
+            ["decor", "꾸미기"],
             ["trust", "신뢰 칭호"],
             ["social", "소셜 칭호"],
           ] as const).map(([key, label]) => (
@@ -200,6 +202,8 @@ export default function ProfilePage() {
             </Card>
           </>
         )}
+
+        {tab === "decor" && <ProfileDecorPanel />}
 
         {tab === "trust" && (
           <Card className="mt-6">
