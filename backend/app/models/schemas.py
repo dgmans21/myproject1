@@ -149,6 +149,7 @@ class RoomCreate(BaseModel):
     room_type: RoomType = RoomType.ONE_TIME
     """임시방(ONE_TIME)일 때 필수. 날짜 단위 만료(해당일 23:59 UTC)."""
     expire_date: date | None = None
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class RoomUpdate(BaseModel):
@@ -156,6 +157,7 @@ class RoomUpdate(BaseModel):
     description: str | None = None
     purpose: str | None = None
     expire_date: date | None = None
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class RoomActivityDay(BaseModel):
@@ -173,6 +175,7 @@ class RoomResponse(BaseModel):
     is_fixed: bool = False
     expire_at: str | None = None
     last_activity_at: str | None = None
+    accent_color: str | None = None
     member_count: int = 0
     created_at: str
 

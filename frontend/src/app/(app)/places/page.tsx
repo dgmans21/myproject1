@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
+import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -12,7 +13,8 @@ import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
 import { geocodeAddress } from "@/lib/kakao-map";
-import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map } from "lucide-react";
+import { formatPlaceRating, PLACE_RATING_OPTIONS } from "@/lib/place-ratings";
+import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare } from "lucide-react";
 
 export default function PlacesPage() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -27,6 +29,10 @@ export default function PlacesPage() {
   const [rating, setRating] = useState(4);
   const [reviewText, setReviewText] = useState("");
   const [replaceModal, setReplaceModal] = useState<{
+    placeId: string;
+    placeName: string;
+  } | null>(null);
+  const [reviewsModal, setReviewsModal] = useState<{
     placeId: string;
     placeName: string;
   } | null>(null);
@@ -266,7 +272,7 @@ export default function PlacesPage() {
                   </p>
                 )}
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant={place.my_recommendation_vote === "RECOMMEND" ? "primary" : "secondary"}
@@ -281,6 +287,15 @@ export default function PlacesPage() {
                   >
                     <ThumbsDown className="h-3.5 w-3.5" /> 비추천
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setReviewsModal({ placeId: place.id, placeName: place.name })
+                    }
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> 리뷰 보기
+                  </Button>
                 </div>
 
                 {place.my_review && (
@@ -291,14 +306,17 @@ export default function PlacesPage() {
 
                 {ratingPlace === place.id ? (
                   <div className="mt-4 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {[1, 2, 3, 4, 4.5, 5].map((r) => (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {PLACE_RATING_OPTIONS.map((r) => (
                         <button
                           key={r}
+                          type="button"
                           onClick={() => setRating(r)}
-                          className={`rounded-lg px-2 py-1 text-sm ${rating === r ? "bg-warm/20 text-warm font-bold" : "text-muted"}`}
+                          className={`min-w-[2.25rem] rounded-lg px-2 py-1 text-sm ${
+                            rating === r ? "bg-warm/20 text-warm font-bold" : "text-muted"
+                          }`}
                         >
-                          {r}
+                          {formatPlaceRating(r)}
                         </button>
                       ))}
                     </div>
@@ -330,6 +348,13 @@ export default function PlacesPage() {
         onConfirm={(replacePlaceId) => {
           if (replaceModal) submitRating(replaceModal.placeId, replacePlaceId);
         }}
+      />
+
+      <PlaceReviewsModal
+        open={Boolean(reviewsModal)}
+        placeId={reviewsModal?.placeId ?? null}
+        placeName={reviewsModal?.placeName}
+        onClose={() => setReviewsModal(null)}
       />
     </div>
   );

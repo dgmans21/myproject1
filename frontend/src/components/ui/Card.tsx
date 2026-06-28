@@ -4,11 +4,13 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   hover?: boolean;
+  style?: React.CSSProperties;
 }
 
-export function Card({ children, className, hover }: CardProps) {
+export function Card({ children, className, hover, style }: CardProps) {
   return (
     <div
+      style={style}
       className={cn(
         "gradient-card rounded-2xl border border-border p-6 shadow-sm",
         hover && "transition-shadow hover:shadow-md cursor-pointer",

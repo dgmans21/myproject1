@@ -44,6 +44,11 @@ export const MOCK_ROOM_MEMBERS = [
     social_title: "모임 요정",
     social_badge_color: "#2DD4BF",
     mbti_types: ["ENFP", "ENTP"],
+    profile_decor: {
+      chinese_zodiac: "MONKEY",
+      western_zodiac: "GEMINI",
+      blood_type: "A",
+    },
     is_me: true,
   },
   {
@@ -54,6 +59,11 @@ export const MOCK_ROOM_MEMBERS = [
     social_title: "약속 지킴이",
     social_badge_color: "#60A5FA",
     mbti_types: ["ISTJ"],
+    profile_decor: {
+      chinese_zodiac: "OX",
+      western_zodiac: "CAPRICORN",
+      blood_type: "B",
+    },
     is_me: false,
   },
   {
@@ -64,9 +74,38 @@ export const MOCK_ROOM_MEMBERS = [
     social_title: "인싸 새싹",
     social_badge_color: "#6366F1",
     mbti_types: ["INFP"],
+    profile_decor: {
+      chinese_zodiac: "DRAGON",
+      western_zodiac: "PISCES",
+      blood_type: "O",
+    },
     is_me: false,
   },
 ];
+
+/** 초대·친구 선택 UI용 (데모 계정 목록, 친구 API 연동 전) */
+export const MOCK_FRIENDS = [
+  { user_id: "demo-member-2", display_name: "친구 A" },
+  { user_id: "demo-member-3", display_name: "친구 B" },
+  { user_id: "demo-friend-4", display_name: "친구 C" },
+  { user_id: "demo-friend-5", display_name: "친구 D" },
+];
+
+/** 초대 수락·비밀번호 입장 데모용 (내 방 목록에 없는 방) */
+export const MOCK_DISCOVERABLE_ROOM = {
+  id: "demo-room-invite-pending",
+  name: "새로운 스터디 모임",
+  description: "초대·비밀번호 입장 UI 테스트",
+  room_type: "ONE_TIME" as const,
+  room_status: "ACTIVE" as const,
+  is_fixed: false,
+  expire_at: "2026-12-31T23:59:59Z",
+  purpose: "스터디",
+  member_count: 3,
+  last_activity_at: "2026-06-20T10:00:00Z",
+  created_at: "2026-06-19T10:00:00Z",
+  accent_color: "#818CF8",
+};
 
 export const MOCK_APPOINTMENTS = [
   {
@@ -149,6 +188,87 @@ export const MOCK_PLACES = [
     past_travel_hint: "지난에 모였을 때 약 48분 걸렸어요",
   },
 ];
+
+/** 장소별 공개 리뷰 시드 (mock — 실API: place_ratings ⋈ profiles) */
+export const MOCK_PLACE_REVIEWS: Record<
+  string,
+  Array<{
+    user_id: string;
+    display_name: string;
+    rating: number;
+    review: string;
+    created_at: string;
+    mbti_types?: string[];
+    profile_decor?: {
+      chinese_zodiac?: string;
+      western_zodiac?: string;
+      blood_type?: string;
+    };
+  }>
+> = {
+  "demo-place-1": [
+    {
+      user_id: "demo-member-2",
+      display_name: "친구 A",
+      rating: 4.5,
+      review: "곱창 양념이 깔끔하고 대기 줄 대비 회전 빨라요. 단체 모임 추천",
+      created_at: "2026-06-10T12:00:00Z",
+      mbti_types: ["ISTJ"],
+      profile_decor: { chinese_zodiac: "OX", western_zodiac: "CAPRICORN", blood_type: "B" },
+    },
+    {
+      user_id: "demo-rank-2",
+      display_name: "미식탐험가",
+      rating: 4,
+      review: "점심보다 저녁이 더 맛있음. 강남역에서 걸어 5분",
+      created_at: "2026-06-05T18:30:00Z",
+    },
+    {
+      user_id: "demo-member-3",
+      display_name: "친구 B",
+      rating: 5,
+      review: "회식하기 딱 좋은 분위기! 직원분들도 친절해요",
+      created_at: "2026-06-01T20:00:00Z",
+      mbti_types: ["INFP"],
+      profile_decor: { chinese_zodiac: "DRAGON", western_zodiac: "PISCES", blood_type: "O" },
+    },
+  ],
+  "demo-place-2": [
+    {
+      user_id: "demo-rank-3",
+      display_name: "한식마스터",
+      rating: 4,
+      review: "브런치 플레이트 구성 알차고 커피도 괜찮아요",
+      created_at: "2026-06-08T11:00:00Z",
+    },
+    {
+      user_id: "demo-user",
+      display_name: "데모 사용자",
+      rating: 3.5,
+      review: "주말엔 사람 많아서 예약 필수",
+      created_at: "2026-06-12T09:15:00Z",
+      mbti_types: ["ENFP", "ENTP"],
+      profile_decor: { chinese_zodiac: "MONKEY", western_zodiac: "GEMINI", blood_type: "A" },
+    },
+  ],
+  "demo-place-3": [
+    {
+      user_id: "demo-rank-1",
+      display_name: "골드맛집러",
+      rating: 5,
+      review: "사케 종류 많고 안주가 전부 히트. 홍대 모임 1순위",
+      created_at: "2026-06-15T21:00:00Z",
+    },
+    {
+      user_id: "demo-member-2",
+      display_name: "친구 A",
+      rating: 4.5,
+      review: "혼잡하지만 회전 빠름. 치킨 가라아게 강추",
+      created_at: "2026-06-14T19:45:00Z",
+      mbti_types: ["ISTJ"],
+    },
+  ],
+};
 
 /** recommender_titles 시드와 동일 (데모·타입 참조용) */
 export const RECOMMENDER_TITLES = [
@@ -255,6 +375,11 @@ export const MOCK_PROFILE = {
   selected_social_title_id: 4,
   selected_social_title: "모임 요정",
   mbti_types: ["ENFP", "ENTP"],
+  profile_decor: {
+    chinese_zodiac: "MONKEY" as const,
+    western_zodiac: "GEMINI" as const,
+    blood_type: "A" as const,
+  },
   places_adopted_count: 4,
   available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 35),
   available_social_titles: SOCIAL_POINT_TITLES.filter((t) => t.min_points <= 420),

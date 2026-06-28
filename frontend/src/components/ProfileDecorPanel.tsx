@@ -8,27 +8,14 @@ import {
   CHINESE_ZODIAC_OPTIONS,
   ProfileDecorSelection,
   WESTERN_ZODIAC_OPTIONS,
+  fieldsToSelection,
   getBloodTypeIcon,
   getChineseZodiacIcon,
   getWesternZodiacIcon,
+  selectionToFields,
 } from "@/lib/profile-decor-icons";
+import { api, Profile } from "@/lib/api";
 import { Sparkles } from "lucide-react";
-
-const STORAGE_KEY = "profile-decor-local";
-
-function loadSelection(): ProfileDecorSelection {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ProfileDecorSelection) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveSelection(selection: ProfileDecorSelection) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(selection));
-}
 
 function DecorPicker<T extends string>({
   title,
@@ -70,20 +57,32 @@ function DecorPicker<T extends string>({
   );
 }
 
-/** 본인 마이페이지 전용 — localStorage 저장, 타인에게 노출되지 않음 */
-export function ProfileDecorPanel() {
+interface ProfileDecorPanelProps {
+  onUpdated?: (profile: Profile) => void;
+}
+
+export function ProfileDecorPanel({ onUpdated }: ProfileDecorPanelProps) {
   const [selection, setSelection] = useState<ProfileDecorSelection>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setSelection(loadSelection());
+    api.profiles.me().then((p) => setSelection(fieldsToSelection(p.profile_decor))).catch(() => {});
   }, []);
 
-  const update = (patch: Partial<ProfileDecorSelection>) => {
-    setSelection((prev) => {
-      const next = { ...prev, ...patch };
-      saveSelection(next);
-      return next;
-    });
+  const update = async (patch: Partial<ProfileDecorSelection>) => {
+    const prev = selection;
+    const next = { ...selection, ...patch };
+    setSelection(next);
+    setSaving(true);
+    try {
+      const updated = await api.profiles.update({ profile_decor: selectionToFields(next) });
+      onUpdated?.(updated);
+    } catch (err) {
+      setSelection(prev);
+      alert(err instanceof Error ? err.message : "저장 실패");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const chinese = getChineseZodiacIcon(selection.chineseZodiac);
@@ -96,7 +95,7 @@ export function ProfileDecorPanel() {
         <Sparkles className="h-4 w-4 text-primary" /> 마이페이지 꾸미기
       </CardTitle>
       <CardDescription className="mt-1">
-        12간지 · 별자리 · 혈액형 아이콘은 본인 프로필에서만 보입니다 (기기 localStorage 저장).
+        12간지 · 별자리 · 혈액형 아이콘이 닉네임 옆에 표시됩니다. 방 멤버 목록에서도 볼 수 있어요.
       </CardDescription>
 
       {(chinese || western || blood) && (
@@ -128,6 +127,8 @@ export function ProfileDecorPanel() {
           onChange={(id) => update({ bloodType: id })}
         />
       </div>
+
+      {saving && <p className="mt-4 text-xs text-muted">저장 중...</p>}
     </Card>
   );
 }

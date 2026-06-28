@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { RoomCreateForm } from "@/components/RoomCreateForm";
+import { PendingInvitationsCard } from "@/components/PendingInvitationsCard";
+import { RoomJoinCard } from "@/components/RoomJoinCard";
 import { api, ROOM_TYPE_LABELS } from "@/lib/api";
 import { useRoomStore } from "@/stores/room-store";
 import { Plus, Users, Crown, Trash2 } from "lucide-react";
@@ -14,10 +16,19 @@ import Link from "next/link";
 export default function GroupsPage() {
   const { rooms, loading, fetchRooms, updateRoom, removeRoom } = useRoomStore();
   const [showCreate, setShowCreate] = useState(false);
+  const createFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchRooms().catch(() => {});
   }, [fetchRooms]);
+
+  useEffect(() => {
+    if (!showCreate) return;
+    requestAnimationFrame(() => {
+      createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("room-create-name")?.focus();
+    });
+  }, [showCreate]);
 
   const handlePromote = async (id: string) => {
     try {
@@ -47,13 +58,20 @@ export default function GroupsPage() {
             <h1 className="text-2xl font-bold text-foreground">방</h1>
             <p className="mt-1 text-muted">임시방 · 고정방 · 3개월 약속 없으면 보관</p>
           </div>
-          <Button onClick={() => setShowCreate(!showCreate)}>
+          <Button onClick={() => setShowCreate((open) => !open)}>
             <Plus className="h-4 w-4" />
-            새 방
+            {showCreate ? "닫기" : "새 방"}
           </Button>
         </div>
 
-        {showCreate && <RoomCreateForm onClose={() => setShowCreate(false)} />}
+        {showCreate && (
+          <div ref={createFormRef} className="mt-6 scroll-mt-24">
+            <RoomCreateForm onClose={() => setShowCreate(false)} />
+          </div>
+        )}
+
+        <PendingInvitationsCard />
+        <RoomJoinCard />
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {loading ? (
@@ -65,7 +83,16 @@ export default function GroupsPage() {
             </div>
           ) : (
             rooms.map((room) => (
-              <Card key={room.id} hover className="relative">
+              <Card
+                key={room.id}
+                hover
+                className="relative overflow-hidden"
+                style={
+                  room.accent_color
+                    ? { borderLeftWidth: 4, borderLeftColor: room.accent_color }
+                    : undefined
+                }
+              >
                 <Link href={`/groups/${room.id}`}>
                   <div className="flex items-start justify-between">
                     <Badge variant={room.room_type === "REGULAR" ? "primary" : "warm"}>

@@ -95,6 +95,8 @@ async def create_room(body: RoomCreate, user_id: str = Depends(get_current_user_
     }
     if expire_at is not None:
         room_data["expire_at"] = expire_at.isoformat()
+    if body.accent_color:
+        room_data["accent_color"] = body.accent_color
 
     result = sb.table("rooms").insert(room_data).execute()
     room = result.data[0]
@@ -203,11 +205,26 @@ async def invite_member(
 ):
     sb = get_supabase()
     _ensure_owner(sb, str(room_id), user_id)
+
+    invitee_id = str(body.invitee_id)
+    if invitee_id == user_id:
+        raise HTTPException(status_code=400, detail="본인은 초대할 수 없습니다")
+
+    existing = (
+        sb.table("room_members")
+        .select("id")
+        .eq("room_id", str(room_id))
+        .eq("user_id", invitee_id)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(status_code=400, detail="이미 방 멤버입니다")
+
     sb.table("room_invitations").upsert(
         {
             "room_id": str(room_id),
             "inviter_id": user_id,
-            "invitee_id": str(body.invitee_id),
+            "invitee_id": invitee_id,
             "status": "pending",
         },
         on_conflict="room_id,invitee_id",
@@ -218,6 +235,14 @@ async def invite_member(
 @router.post("/{room_id}/members", status_code=201)
 async def accept_invitation(room_id: UUID, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
+    room = sb.table("rooms").select("*").eq("id", str(room_id)).single().execute()
+    if not room.data:
+        raise HTTPException(status_code=404, detail="방을 찾을 수 없습니다")
+    if not room.data.get("is_fixed") and room.data.get("expire_at"):
+        exp = datetime.fromisoformat(room.data["expire_at"].replace("Z", "+00:00"))
+        if exp <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="만료된 방입니다")
+
     invite = (
         sb.table("room_invitations")
         .select("*")
@@ -234,6 +259,25 @@ async def accept_invitation(room_id: UUID, user_id: str = Depends(get_current_us
         {"room_id": str(room_id), "user_id": user_id, "role": "MEMBER"},
         on_conflict="room_id,user_id",
     ).execute()
+    return {"ok": True}
+
+
+@router.post("/{room_id}/invite/reject", status_code=200)
+async def reject_invitation(room_id: UUID, user_id: str = Depends(get_current_user_id)):
+    """초대 대상: pending 초대 거절"""
+    sb = get_supabase()
+    invite = (
+        sb.table("room_invitations")
+        .select("*")
+        .eq("room_id", str(room_id))
+        .eq("invitee_id", user_id)
+        .eq("status", "pending")
+        .execute()
+    )
+    if not invite.data:
+        raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다")
+
+    sb.table("room_invitations").update({"status": "rejected"}).eq("id", invite.data[0]["id"]).execute()
     return {"ok": True}
 
 

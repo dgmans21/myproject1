@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
@@ -9,9 +9,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { MbtiBadge } from "@/components/MbtiBadge";
+import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { RoomOutputBanner } from "@/components/RoomOutputBanner";
 import { RoomHostTransferPanel } from "@/components/RoomHostTransferPanel";
+import { RoomInvitePanel } from "@/components/RoomInvitePanel";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { useRoomStore } from "@/stores/room-store";
 import { Plus, Calendar, ArrowLeft, Crown } from "lucide-react";
@@ -26,6 +28,7 @@ export default function GroupDetailPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const createFormRef = useRef<HTMLDivElement>(null);
 
   const reloadMembers = () => {
     if (!id) return;
@@ -39,6 +42,14 @@ export default function GroupDetailPage() {
     api.appointments.listByRoom(id).then(setAppointments).catch(() => {});
     reloadMembers();
   }, [id, fetchRoom, fetchRoomHeatmap]);
+
+  useEffect(() => {
+    if (!showCreate) return;
+    requestAnimationFrame(() => {
+      createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("apt-create-title")?.focus();
+    });
+  }, [showCreate]);
 
   const heatmapData = roomHeatmap.map((d) => ({
     date: d.activity_on,
@@ -78,6 +89,13 @@ export default function GroupDetailPage() {
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
+                {room.accent_color && (
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: room.accent_color }}
+                    aria-hidden
+                  />
+                )}
                 <h1 className="text-2xl font-bold text-foreground">{room.name}</h1>
                 <Badge variant={room.room_type === "REGULAR" ? "primary" : "warm"}>
                   {ROOM_TYPE_LABELS[room.room_type]}
@@ -85,9 +103,35 @@ export default function GroupDetailPage() {
               </div>
               {room.purpose && <p className="mt-1 text-muted">{room.purpose}</p>}
             </div>
-            <Button onClick={() => setShowCreate(!showCreate)}>
-              <Plus className="h-4 w-4" /> 새 약속
+            <Button onClick={() => setShowCreate((open) => !open)}>
+              <Plus className="h-4 w-4" /> {showCreate ? "닫기" : "새 약속"}
             </Button>
+          </div>
+        )}
+
+        {showCreate && (
+          <div ref={createFormRef} className="mt-6 scroll-mt-24">
+            <Card className="ring-2 ring-primary/20">
+              <CardTitle>약속 만들기</CardTitle>
+              <div className="mt-4 space-y-4">
+                <Input
+                  id="apt-create-title"
+                  label="약속 제목"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="팀 회식"
+                />
+                <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={handleCreate} disabled={creating || !title.trim()}>
+                    약속 생성 & 1차 투표 시작
+                  </Button>
+                  <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={creating}>
+                    취소
+                  </Button>
+                </div>
+              </div>
+            </Card>
           </div>
         )}
 
@@ -96,6 +140,8 @@ export default function GroupDetailPage() {
         <div className="mt-6">
           <RoomHostTransferPanel roomId={id!} onUpdated={reloadMembers} />
         </div>
+
+        <RoomInvitePanel roomId={id!} />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Card>
@@ -110,6 +156,7 @@ export default function GroupDetailPage() {
                 <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="font-medium flex items-center gap-1.5">
                     {m.display_name}
+                    <ProfileDecorBadges decor={m.profile_decor} />
                     {m.is_me && <span className="text-xs text-muted">(나)</span>}
                     {m.role === "OWNER" && (
                       <Badge variant="warm" className="text-[10px] px-1.5 py-0">
@@ -131,17 +178,6 @@ export default function GroupDetailPage() {
             </ul>
           </Card>
         </div>
-
-        {showCreate && (
-          <Card className="mt-6">
-            <CardTitle>약속 만들기</CardTitle>
-            <div className="mt-4 space-y-4">
-              <Input label="약속 제목" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="팀 회식" />
-              <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-              <Button onClick={handleCreate} disabled={creating}>약속 생성 & 1차 투표 시작</Button>
-            </div>
-          </Card>
-        )}
 
         <div className="mt-8 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">약속 목록</h2>

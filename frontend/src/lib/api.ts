@@ -2,8 +2,11 @@ import {
   MOCK_APPOINTMENTS,
   MOCK_BRIEFING_COMMENTS,
   MOCK_DATE_SUMMARY,
+  MOCK_DISCOVERABLE_ROOM,
+  MOCK_FRIENDS,
   MOCK_HEATMAP,
   MOCK_MEMBER_BRIEFING,
+  MOCK_PLACE_REVIEWS,
   MOCK_PLACES,
   MOCK_PROFILE,
   MOCK_RANKING,
@@ -19,6 +22,7 @@ import {
   punctualityStatus,
 } from "./appointment-time";
 import { SOCIAL_POINT_TITLES } from "./social-points";
+import type { ProfileDecorFields } from "./profile-decor-icons";
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
@@ -88,17 +92,132 @@ function cloneRoomMembers(roomId: string): RoomMember[] {
 let mockRoomMembersState: Record<string, RoomMember[]> = {
   "demo-room-1": cloneRoomMembers("demo-room-1"),
   "demo-room-2": cloneRoomMembers("demo-room-2"),
+  [MOCK_DISCOVERABLE_ROOM.id]: [
+    {
+      user_id: "demo-member-2",
+      display_name: "친구 A",
+      role: "OWNER",
+      social_points: 150,
+      social_title: "약속 지킴이",
+      social_badge_color: "#60A5FA",
+      mbti_types: ["ISTJ"],
+      is_me: false,
+    },
+    {
+      user_id: "demo-member-3",
+      display_name: "친구 B",
+      role: "MEMBER",
+      social_points: 820,
+      social_title: "인싸 새싹",
+      social_badge_color: "#6366F1",
+      mbti_types: ["INFP"],
+      is_me: false,
+    },
+  ],
 };
 
 let mockHostTransferPending: Record<string, HostTransferPending> = {};
 let mockRecommendationVotes: Record<string, "RECOMMEND" | "NOT_RECOMMEND"> = {};
 let mockPlaceReviews: Record<string, string> = {};
+let mockPlaceReviewsList: Record<
+  string,
+  Array<Omit<PlaceReviewItem, "is_me">>
+> = Object.fromEntries(
+  Object.entries(MOCK_PLACE_REVIEWS).map(([id, rows]) => [id, rows.map((r) => ({ ...r }))])
+);
+
+type InvitationStatus = "pending" | "accepted" | "rejected";
+
+interface MockInvitation {
+  id: string;
+  room_id: string;
+  room_name: string;
+  inviter_id: string;
+  inviter_display_name: string;
+  invitee_id: string;
+  status: InvitationStatus;
+}
+
+/** mock 전용 평문 — 실서비스는 DB에 bcrypt/argon2 해시만 저장 */
+let mockRoomJoinPasswords: Record<string, string> = {
+  [MOCK_DISCOVERABLE_ROOM.id]: "study2024",
+};
+
+const mockRoomCatalog: Record<string, Room> = {
+  [MOCK_DISCOVERABLE_ROOM.id]: { ...MOCK_DISCOVERABLE_ROOM },
+};
+
+let mockInvitations: MockInvitation[] = [
+  {
+    id: "inv-seed-1",
+    room_id: MOCK_DISCOVERABLE_ROOM.id,
+    room_name: MOCK_DISCOVERABLE_ROOM.name,
+    inviter_id: "demo-member-2",
+    inviter_display_name: "친구 A",
+    invitee_id: "demo-user",
+    status: "pending",
+  },
+];
+
+function getCatalogRoom(roomId: string): Room | undefined {
+  return mockRooms.find((r) => r.id === roomId) ?? mockRoomCatalog[roomId];
+}
+
+function isRoomMember(roomId: string, userId: string): boolean {
+  return getRoomMembers(roomId).some((m) => m.user_id === userId);
+}
+
+function roomHasJoinPassword(roomId: string): boolean {
+  return Boolean(mockRoomJoinPasswords[roomId]);
+}
+
+function attachRoomAccessMeta(room: Room): Room {
+  return { ...room, requires_join_password: roomHasJoinPassword(room.id) };
+}
+
+function addCurrentUserToRoom(roomId: string, role: "OWNER" | "MEMBER" = "MEMBER") {
+  const catalog = getCatalogRoom(roomId);
+  if (!catalog) throw new Error("방을 찾을 수 없습니다");
+  if (isRoomMember(roomId, mockProfile.id)) return;
+
+  if (!mockRooms.some((r) => r.id === roomId)) {
+    mockRooms = [{ ...catalog, member_count: catalog.member_count + 1 }, ...mockRooms];
+  } else {
+    mockRooms = mockRooms.map((r) =>
+      r.id === roomId ? { ...r, member_count: r.member_count + 1 } : r
+    );
+  }
+
+  const existing = getRoomMembers(roomId);
+  mockRoomMembersState[roomId] = [
+    ...existing.filter((m) => !m.is_me),
+    {
+      user_id: mockProfile.id,
+      display_name: mockProfile.display_name,
+      role,
+      social_points: mockProfile.social_points,
+      social_title: mockProfile.selected_social_title,
+      social_badge_color: "#2DD4BF",
+      mbti_types: [...mockProfile.mbti_types],
+      profile_decor: mockProfile.profile_decor ? { ...mockProfile.profile_decor } : undefined,
+      is_me: true,
+    },
+  ];
+}
 
 function getRoomMembers(roomId: string): RoomMember[] {
   if (!mockRoomMembersState[roomId]) {
     mockRoomMembersState[roomId] = cloneRoomMembers(roomId);
   }
   return mockRoomMembersState[roomId];
+}
+
+function syncMemberDecor(userId: string, decor?: ProfileDecorFields) {
+  for (const roomId of Object.keys(mockRoomMembersState)) {
+    mockRoomMembersState[roomId] = getRoomMembers(roomId).map((m) =>
+      m.user_id === userId ? { ...m, profile_decor: decor ? { ...decor } : undefined } : m
+    );
+  }
 }
 
 function getRoomOwner(members: RoomMember[]): RoomMember | undefined {
@@ -288,9 +407,93 @@ function applyMockRating(
     else delete mockPlaceReviews[placeId];
   }
   recalcPlaceAvg(placeId, rating, isNew);
+  syncCurrentUserPlaceReview(placeId);
+}
+
+function syncCurrentUserPlaceReview(placeId: string) {
+  const rating = mockUserRatings[placeId];
+  if (rating === undefined) return;
+
+  const review = mockPlaceReviews[placeId] ?? "";
+  const entry: Omit<PlaceReviewItem, "is_me"> = {
+    user_id: mockProfile.id,
+    display_name: mockProfile.display_name,
+    rating,
+    review,
+    created_at: new Date().toISOString(),
+    mbti_types: [...mockProfile.mbti_types],
+    profile_decor: mockProfile.profile_decor ? { ...mockProfile.profile_decor } : undefined,
+  };
+
+  if (!mockPlaceReviewsList[placeId]) {
+    mockPlaceReviewsList[placeId] = [];
+  }
+  const idx = mockPlaceReviewsList[placeId].findIndex((r) => r.user_id === mockProfile.id);
+  if (idx >= 0) {
+    mockPlaceReviewsList[placeId][idx] = entry;
+  } else {
+    mockPlaceReviewsList[placeId].unshift(entry);
+  }
+}
+
+function getPlaceReviews(placeId: string): PlaceReviewItem[] {
+  return (mockPlaceReviewsList[placeId] ?? [])
+    .map((r) => ({
+      ...r,
+      is_me: r.user_id === mockProfile.id,
+    }))
+    .sort((a, b) => {
+      const aHas = Boolean(a.review.trim());
+      const bHas = Boolean(b.review.trim());
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return b.created_at.localeCompare(a.created_at);
+    });
+}
+
+function assertRoomOwnerForInvite(roomId: string) {
+  const members = getRoomMembers(roomId);
+  const owner = getRoomOwner(members);
+  if (!owner || owner.user_id !== mockProfile.id) {
+    throw new Error("방장만 초대할 수 있습니다");
+  }
+}
+
+function inviteOneMember(roomId: string, inviteeId: string) {
+  assertRoomOwnerForInvite(roomId);
+  if (inviteeId === mockProfile.id) {
+    throw new Error("본인은 초대할 수 없습니다");
+  }
+  if (isRoomMember(roomId, inviteeId)) {
+    throw new Error("이미 방 멤버입니다");
+  }
+  const room = getCatalogRoom(roomId) ?? mockRooms.find((r) => r.id === roomId);
+  if (!room) throw new Error("방을 찾을 수 없습니다");
+  const friend = MOCK_FRIENDS.find((f) => f.user_id === inviteeId);
+  const alreadyPending = mockInvitations.some(
+    (i) => i.room_id === roomId && i.invitee_id === inviteeId && i.status === "pending"
+  );
+  if (alreadyPending) {
+    throw new Error("이미 초대를 보냈습니다");
+  }
+  mockInvitations.push({
+    id: `inv-${Date.now()}-${inviteeId}`,
+    room_id: roomId,
+    room_name: room.name,
+    inviter_id: mockProfile.id,
+    inviter_display_name: mockProfile.display_name,
+    invitee_id: inviteeId,
+    status: "pending",
+  });
+  return friend?.display_name ?? inviteeId;
 }
 
 export const api = {
+  friends: {
+    list: async () => {
+      await delay();
+      return MOCK_FRIENDS.filter((f) => f.user_id !== mockProfile.id);
+    },
+  },
   profiles: {
     me: async () => {
       await delay();
@@ -320,7 +523,12 @@ export const api = {
       if (data.mbti_types && data.mbti_types.length > 2) {
         throw new Error("MBTI는 최대 2개까지 선택할 수 있습니다");
       }
-      mockProfile = { ...mockProfile, ...data };
+      const { profile_decor, ...rest } = data;
+      mockProfile = { ...mockProfile, ...rest };
+      if (profile_decor !== undefined) {
+        mockProfile.profile_decor = { ...mockProfile.profile_decor, ...profile_decor };
+        syncMemberDecor(mockProfile.id, mockProfile.profile_decor);
+      }
       if (data.selected_social_title_id) {
         const t = SOCIAL_POINT_TITLES.find((x) => x.id === data.selected_social_title_id);
         if (t) mockProfile.selected_social_title = t.title;
@@ -337,12 +545,15 @@ export const api = {
     },
   },
   rooms: {
-    list: async () => { await delay(); return mockRooms; },
+    list: async () => {
+      await delay();
+      return mockRooms.map(attachRoomAccessMeta);
+    },
     get: async (id: string) => {
       await delay();
       const r = mockRooms.find((x) => x.id === id);
       if (!r) throw new Error("방을 찾을 수 없습니다");
-      return r;
+      return attachRoomAccessMeta(r);
     },
     activityHeatmap: async (_id: string) => {
       await delay();
@@ -371,7 +582,12 @@ export const api = {
         member_count: 1,
         last_activity_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
+        accent_color: data.accent_color,
       };
+      if (data.join_password?.trim()) {
+        mockRoomJoinPasswords[room.id] = data.join_password.trim();
+      }
+      mockRoomCatalog[room.id] = room;
       mockRooms = [room, ...mockRooms];
       mockRoomMembersState[room.id] = [
         {
@@ -382,10 +598,150 @@ export const api = {
           social_title: mockProfile.selected_social_title,
           social_badge_color: "#2DD4BF",
           mbti_types: [...mockProfile.mbti_types],
+          profile_decor: mockProfile.profile_decor ? { ...mockProfile.profile_decor } : undefined,
           is_me: true,
         },
       ];
-      return room;
+      return attachRoomAccessMeta(room);
+    },
+    previewJoin: async (roomId: string) => {
+      await delay();
+      const room = getCatalogRoom(roomId.trim());
+      if (!room) throw new Error("방을 찾을 수 없습니다");
+      return {
+        room_id: room.id,
+        room_name: room.name,
+        requires_join_password: roomHasJoinPassword(room.id),
+        is_member: isRoomMember(room.id, mockProfile.id),
+      };
+    },
+    joinWithPassword: async (roomId: string, password: string) => {
+      await delay();
+      const id = roomId.trim();
+      const room = getCatalogRoom(id);
+      if (!room) throw new Error("방을 찾을 수 없습니다");
+      if (isRoomMember(id, mockProfile.id)) {
+        throw new Error("이미 이 방의 멤버입니다");
+      }
+      const required = mockRoomJoinPasswords[id];
+      if (!required) {
+        throw new Error("이 방은 비밀번호 입장이 설정되어 있지 않습니다. 초대를 확인하세요.");
+      }
+      if (password !== required) {
+        throw new Error("비밀번호가 올바르지 않습니다");
+      }
+      addCurrentUserToRoom(id);
+      return attachRoomAccessMeta(mockRooms.find((r) => r.id === id)!);
+    },
+    listInviteCandidates: async (roomId: string) => {
+      await delay();
+      const memberIds = new Set(getRoomMembers(roomId).map((m) => m.user_id));
+      return MOCK_FRIENDS.filter(
+        (f) => f.user_id !== mockProfile.id && !memberIds.has(f.user_id)
+      );
+    },
+    inviteMember: async (roomId: string, inviteeId: string) => {
+      await delay();
+      const invitee_display_name = inviteOneMember(roomId, inviteeId);
+      return { ok: true, invitee_display_name };
+    },
+    inviteMembers: async (roomId: string, inviteeIds: string[]) => {
+      await delay();
+      const unique = [...new Set(inviteeIds.filter(Boolean))];
+      if (unique.length === 0) {
+        throw new Error("초대할 친구를 선택하세요");
+      }
+
+      const invited: { user_id: string; display_name: string }[] = [];
+      const failed: { user_id: string; display_name: string; message: string }[] = [];
+
+      for (const inviteeId of unique) {
+        const display_name =
+          MOCK_FRIENDS.find((f) => f.user_id === inviteeId)?.display_name ?? inviteeId;
+        try {
+          const name = inviteOneMember(roomId, inviteeId);
+          invited.push({ user_id: inviteeId, display_name: name });
+        } catch (err) {
+          failed.push({
+            user_id: inviteeId,
+            display_name,
+            message: err instanceof Error ? err.message : "초대 실패",
+          });
+        }
+      }
+
+      if (invited.length === 0) {
+        throw new Error(failed[0]?.message ?? "초대에 실패했습니다");
+      }
+
+      return {
+        ok: true as const,
+        invited_count: invited.length,
+        invited,
+        failed,
+      };
+    },
+    listMyInvitations: async () => {
+      await delay();
+      return mockInvitations
+        .filter((i) => i.invitee_id === mockProfile.id && i.status === "pending")
+        .map((i) => ({
+          id: i.id,
+          room_id: i.room_id,
+          room_name: i.room_name,
+          inviter_display_name: i.inviter_display_name,
+          status: i.status,
+        }));
+    },
+    acceptInvitation: async (roomId: string) => {
+      await delay();
+      const inv = mockInvitations.find(
+        (i) =>
+          i.room_id === roomId &&
+          i.invitee_id === mockProfile.id &&
+          i.status === "pending"
+      );
+      if (!inv) throw new Error("대기 중인 초대가 없습니다");
+      if (isRoomMember(roomId, mockProfile.id)) {
+        inv.status = "accepted";
+        return {
+          ok: true,
+          room: attachRoomAccessMeta(mockRooms.find((r) => r.id === roomId)!),
+          password_required_on_join: roomHasJoinPassword(roomId),
+        };
+      }
+      inv.status = "accepted";
+      addCurrentUserToRoom(roomId);
+      return {
+        ok: true,
+        room: attachRoomAccessMeta(mockRooms.find((r) => r.id === roomId)!),
+        password_required_on_join: roomHasJoinPassword(roomId),
+      };
+    },
+    rejectInvitation: async (roomId: string) => {
+      await delay();
+      const inv = mockInvitations.find(
+        (i) =>
+          i.room_id === roomId &&
+          i.invitee_id === mockProfile.id &&
+          i.status === "pending"
+      );
+      if (!inv) throw new Error("대기 중인 초대가 없습니다");
+      inv.status = "rejected";
+      return { ok: true };
+    },
+    setJoinPassword: async (roomId: string, password: string | null) => {
+      await delay();
+      const owner = getRoomOwner(getRoomMembers(roomId));
+      if (!owner || owner.user_id !== mockProfile.id) {
+        throw new Error("방장만 비밀번호를 설정할 수 있습니다");
+      }
+      if (password?.trim()) {
+        mockRoomJoinPasswords[roomId] = password.trim();
+      } else {
+        delete mockRoomJoinPasswords[roomId];
+      }
+      return { ok: true, requires_join_password: roomHasJoinPassword(roomId) };
     },
     members: async (roomId: string) => {
       await delay();
@@ -649,6 +1005,18 @@ export const api = {
       applyMockRating(id, data.rating, data.replace_place_id, data.review);
       return { ok: true };
     },
+    listReviews: async (placeId: string) => {
+      await delay();
+      const place = mockPlaces.find((p) => p.id === placeId);
+      if (!place) throw new Error("장소를 찾을 수 없습니다");
+      const reviews = getPlaceReviews(placeId);
+      return {
+        place_id: placeId,
+        place_name: place.name,
+        reviews,
+        review_count: reviews.filter((r) => r.review.trim()).length,
+      };
+    },
     voteRecommendation: async (id: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
       await delay();
       if (mockRecommendationVotes[id] === vote) {
@@ -712,6 +1080,7 @@ export interface Profile {
   selected_social_title_id?: number;
   selected_social_title?: string;
   mbti_types: string[];
+  profile_decor?: ProfileDecorFields;
   places_adopted_count: number;
   available_titles?: RecommenderTitle[];
   available_social_titles?: SocialPointTitle[];
@@ -729,6 +1098,9 @@ export interface Room {
   last_activity_at?: string;
   member_count: number;
   created_at: string;
+  accent_color?: string;
+  /** 입장 시 비밀번호 필요 여부 (평문 비밀번호는 절대 내려보내지 않음) */
+  requires_join_password?: boolean;
 }
 
 export interface RoomCreate {
@@ -737,6 +1109,29 @@ export interface RoomCreate {
   purpose?: string;
   room_type?: "ONE_TIME" | "REGULAR";
   expire_date?: string;
+  accent_color?: string;
+  /** mock·실API 모두 서버/DB에서만 검증 — 클라이언트 저장 금지 */
+  join_password?: string;
+}
+
+export interface JoinPreview {
+  room_id: string;
+  room_name: string;
+  requires_join_password: boolean;
+  is_member: boolean;
+}
+
+export interface RoomInvitationItem {
+  id: string;
+  room_id: string;
+  room_name: string;
+  inviter_display_name: string;
+  status: "pending" | "accepted" | "rejected";
+}
+
+export interface FriendSummary {
+  user_id: string;
+  display_name: string;
 }
 
 export interface RoomActivityDay {
@@ -752,6 +1147,7 @@ export interface RoomMember {
   social_title?: string;
   social_badge_color?: string;
   mbti_types: string[];
+  profile_decor?: ProfileDecorFields;
   is_me: boolean;
 }
 
@@ -904,6 +1300,24 @@ export interface Place {
   my_rating?: number;
   my_review?: string;
   my_recommendation_vote?: "RECOMMEND" | "NOT_RECOMMEND" | null;
+}
+
+export interface PlaceReviewItem {
+  user_id: string;
+  display_name: string;
+  rating: number;
+  review: string;
+  created_at: string;
+  is_me: boolean;
+  mbti_types?: string[];
+  profile_decor?: ProfileDecorFields;
+}
+
+export interface PlaceReviewsResponse {
+  place_id: string;
+  place_name: string;
+  reviews: PlaceReviewItem[];
+  review_count: number;
 }
 
 export interface FiveStarPlaceItem {

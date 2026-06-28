@@ -64,6 +64,14 @@ export function KakaoMap({
 
     return () => {
       cancelled = true;
+      markerInstancesRef.current.forEach((m) => {
+        (m as { setMap: (v: null) => void }).setMap(null);
+      });
+      markerInstancesRef.current = [];
+      if (clustererRef.current) {
+        (clustererRef.current as { clear: () => void }).clear();
+        clustererRef.current = null;
+      }
       mapRef.current = null;
     };
   }, [center?.lat, center?.lng, level]);

@@ -7,12 +7,18 @@ import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { api, Place, TIER_LABELS } from "@/lib/api";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, MessageSquare } from "lucide-react";
 
 export default function PlacesMapPage() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reviewsModal, setReviewsModal] = useState<{
+    placeId: string;
+    placeName: string;
+  } | null>(null);
 
   useEffect(() => {
     api.places.list().then(setPlaces).catch(() => {});
@@ -79,6 +85,16 @@ export default function PlacesMapPage() {
                 }}
               />
             </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-4"
+              onClick={() =>
+                setReviewsModal({ placeId: selected.id, placeName: selected.name })
+              }
+            >
+              <MessageSquare className="h-3.5 w-3.5" /> 리뷰 보기
+            </Button>
           </Card>
         )}
 
@@ -89,6 +105,13 @@ export default function PlacesMapPage() {
           </div>
         )}
       </main>
+
+      <PlaceReviewsModal
+        open={Boolean(reviewsModal)}
+        placeId={reviewsModal?.placeId ?? null}
+        placeName={reviewsModal?.placeName}
+        onClose={() => setReviewsModal(null)}
+      />
     </div>
   );
 }

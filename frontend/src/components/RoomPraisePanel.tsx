@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { MbtiBadge } from "@/components/MbtiBadge";
+import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { api, PraiseSticker, PraiseVoteStatus, RoomMember } from "@/lib/api";
 import { PRAISE_STICKER_LABELS } from "@/lib/social-points";
@@ -135,7 +136,10 @@ export function RoomPraisePanel({ roomId, appointmentId, isOwner }: RoomPraisePa
         <ul className="mt-2 space-y-2">
           {members.filter((m) => !m.is_me).map((m) => (
             <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="font-medium">{m.display_name}</span>
+              <span className="font-medium inline-flex items-center gap-1.5">
+                {m.display_name}
+                <ProfileDecorBadges decor={m.profile_decor} />
+              </span>
               <div className="flex flex-wrap items-center gap-2">
                 {m.mbti_types.map((t) => (
                   <MbtiBadge key={t} type={t} />

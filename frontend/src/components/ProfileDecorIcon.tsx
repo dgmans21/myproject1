@@ -11,7 +11,7 @@ interface ProfileDecorIconProps {
   showLabel?: boolean;
 }
 
-/** 마이페이지 꾸미기 전용 — 외부 공개 UI에서는 사용하지 않음 */
+/** 프로필 꾸미기 아이콘 (마이페이지 미리보기 등) */
 export function ProfileDecorIcon({
   entry,
   size = 20,

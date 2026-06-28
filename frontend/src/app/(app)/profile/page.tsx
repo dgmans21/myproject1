@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { ProfileBadgeBorder, TrustBadge } from "@/components/ProfileBadgeBorder";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { MbtiBadge } from "@/components/MbtiBadge";
+import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
 import { api, Profile, RecommenderTitle, SocialPointTitle } from "@/lib/api";
@@ -110,7 +111,10 @@ export default function ProfilePage() {
           <Card>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <CardTitle className="text-xl">{profile.display_name}</CardTitle>
+                <CardTitle className="text-xl flex flex-wrap items-center gap-2">
+                  {profile.display_name}
+                  <ProfileDecorBadges decor={profile.profile_decor} size={16} />
+                </CardTitle>
                 <CardDescription className="mt-1">
                   {AGE_LABELS[profile.age_group] ?? profile.age_group} · {profile.residence}
                 </CardDescription>
@@ -203,7 +207,11 @@ export default function ProfilePage() {
           </>
         )}
 
-        {tab === "decor" && <ProfileDecorPanel />}
+        {tab === "decor" && (
+          <ProfileDecorPanel
+            onUpdated={(p) => setProfile(p)}
+          />
+        )}
 
         {tab === "trust" && (
           <Card className="mt-6">

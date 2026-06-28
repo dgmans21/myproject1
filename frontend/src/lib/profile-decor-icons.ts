@@ -1,5 +1,5 @@
 /**
- * 마이페이지 꾸미기 전용 아이콘 매핑 (본인만 보는 UI).
+ * 프로필 꾸미기 아이콘 매핑 (12간지 · 별자리 · 혈액형).
  * lucide-react + 커스텀 12간지 SVG (외부 CDN 없음).
  */
 import type { LucideIcon } from "lucide-react";
@@ -145,6 +145,34 @@ export interface ProfileDecorSelection {
   chineseZodiac?: ChineseZodiacId;
   westernZodiac?: WesternZodiacId;
   bloodType?: BloodTypeId;
+}
+
+/** API·멤버 목록용 (snake_case) */
+export interface ProfileDecorFields {
+  chinese_zodiac?: ChineseZodiacId;
+  western_zodiac?: WesternZodiacId;
+  blood_type?: BloodTypeId;
+}
+
+export function selectionToFields(sel: ProfileDecorSelection): ProfileDecorFields {
+  return {
+    chinese_zodiac: sel.chineseZodiac,
+    western_zodiac: sel.westernZodiac,
+    blood_type: sel.bloodType,
+  };
+}
+
+export function fieldsToSelection(fields?: ProfileDecorFields | null): ProfileDecorSelection {
+  if (!fields) return {};
+  return {
+    chineseZodiac: fields.chinese_zodiac,
+    westernZodiac: fields.western_zodiac,
+    bloodType: fields.blood_type,
+  };
+}
+
+export function hasProfileDecor(fields?: ProfileDecorFields | null): boolean {
+  return Boolean(fields?.chinese_zodiac || fields?.western_zodiac || fields?.blood_type);
 }
 
 export function getChineseZodiacIcon(id?: ChineseZodiacId | null) {
