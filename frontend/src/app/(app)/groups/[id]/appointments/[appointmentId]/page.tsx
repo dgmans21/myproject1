@@ -6,7 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { TeamScheduleBoard, TeamScheduleItem } from "@/components/TeamScheduleBoard";
+import { VoteMonthCalendar } from "@/components/VoteMonthCalendar";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import type { WriteAction } from "@/lib/permissions";
 import { isGuestSession } from "@/lib/auth-session";
@@ -41,12 +41,6 @@ export default function AppointmentPage() {
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
   const [guestAction, setGuestAction] = useState<WriteAction>("schedule_write");
-  const [teamItems, setTeamItems] = useState<TeamScheduleItem[]>([
-    { id: "meeting", label: "회의", done: false },
-    { id: "design", label: "디자인", done: false },
-    { id: "qa", label: "QA", done: false },
-    { id: "deploy", label: "배포", done: false },
-  ]);
   const readOnly = isGuestSession();
 
   const load = async () => {
@@ -194,21 +188,14 @@ export default function AppointmentPage() {
             <div>
               <h2 className="text-lg font-semibold text-foreground">1차 날짜 투표</h2>
               <p className="mt-1 text-sm text-muted">
-                주간·월간 보기로 팀 일정과 가능한 날짜를 함께 조율하세요
+                가능한 날짜를 선택한 뒤 투표를 제출하세요.
               </p>
             </div>
 
-            <TeamScheduleBoard
+            <VoteMonthCalendar
               selectedDates={selectedDates}
               onToggleDate={toggleDate}
               voteSummary={dateSummary}
-              teamItems={teamItems}
-              onToggleTeamItem={(tid) =>
-                setTeamItems((prev) =>
-                  prev.map((item) => (item.id === tid ? { ...item, done: !item.done } : item))
-                )
-              }
-              readOnly={readOnly}
             />
 
             <Button onClick={submitDateVotes} disabled={selectedDates.size === 0}>

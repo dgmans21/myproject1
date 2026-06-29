@@ -17,6 +17,7 @@ import { RoomInvitePanel } from "@/components/RoomInvitePanel";
 import { InviteLinkPanel } from "@/components/InviteLinkPanel";
 import { RoomActionMenu } from "@/components/RoomActionMenu";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
+import { MeetingPurposeSelector } from "@/components/MeetingPurposeSelector";
 import { TeamScheduleRoomPanel } from "@/components/TeamScheduleRoomPanel";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { isGuestSession } from "@/lib/auth-session";
@@ -172,6 +173,12 @@ export default function GroupDetailPage() {
                 </div>
               </div>
             </Card>
+          </div>
+        )}
+
+        {!isTeamScheduleRoom && (
+          <div className="mt-6">
+            <MeetingPurposeSelector roomId={id!} readOnly={readOnly} />
           </div>
         )}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { TeamMilestonePanel } from "@/components/TeamMilestonePanel";
 import { TeamScheduleMonthView } from "@/components/TeamScheduleMonthView";
 import { TeamScheduleWeekGrid } from "@/components/TeamScheduleWeekGrid";
 import { api } from "@/lib/api";
@@ -23,6 +24,8 @@ export function TeamScheduleRoomPanel({ roomId, readOnly = false }: TeamSchedule
 
   return (
     <div className="space-y-4">
+      <TeamMilestonePanel roomId={roomId} readOnly={readOnly} />
+
       <div className="flex gap-2">
         <button
           type="button"

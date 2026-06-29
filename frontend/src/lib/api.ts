@@ -35,6 +35,7 @@ import {
 } from "./profile-decor-icons";
 import { normalizeInterestEmojis } from "./profile-interests";
 import { isValidRoomAccent } from "./room-accent";
+import { isValidMeetingPurpose, type MeetingPurposeId } from "./meeting-purpose";
 import { defaultInviteExpiry, generateInviteToken } from "./invite-token";
 
 const SAMPLE_ROOM_IDS = new Set(["demo-room-1", "demo-room-2", "demo-room-invite-pending", "demo-team-schedule-1"]);
@@ -601,6 +602,11 @@ export interface TeamScheduleWeekBoard {
   slot_counts: Record<string, number>;
 }
 
+export interface MeetingPurposeSetting {
+  purpose?: MeetingPurposeId;
+  purpose_custom?: string;
+}
+
 type TeamScheduleWeekStore = {
   slots: Record<string, boolean>;
   other_times: string;
@@ -612,6 +618,35 @@ function teamWeekKey(roomId: string, weekStart: string, userId: string): string 
 
 let mockTeamScheduleMemos: TeamScheduleDayMemo[] = MOCK_TEAM_SCHEDULE_DAY_MEMOS.map((m) => ({ ...m }));
 let mockTeamScheduleWeek: Record<string, TeamScheduleWeekStore> = {};
+let mockRoomMeetingPurpose: Record<string, MeetingPurposeSetting> = {
+  "demo-room-1": { purpose: "MONTHLY" },
+};
+
+export interface TeamMilestoneItem {
+  id: string;
+  label: string;
+  done: boolean;
+}
+
+const DEFAULT_TEAM_MILESTONES: TeamMilestoneItem[] = [
+  { id: "meeting", label: "회의", done: false },
+  { id: "design", label: "디자인", done: false },
+  { id: "qa", label: "QA", done: false },
+  { id: "deploy", label: "배포", done: false },
+];
+
+let mockTeamMilestones: Record<string, TeamMilestoneItem[]> = {
+  "demo-team-schedule-1": [
+    { id: "meeting", label: "회의", done: true },
+    { id: "design", label: "디자인", done: false },
+    { id: "qa", label: "QA", done: false },
+    { id: "deploy", label: "배포", done: false },
+  ],
+};
+
+function getTeamMilestones(roomId: string): TeamMilestoneItem[] {
+  return (mockTeamMilestones[roomId] ?? DEFAULT_TEAM_MILESTONES).map((item) => ({ ...item }));
+}
 
 function seedTeamScheduleWeekDemo() {
   const roomId = "demo-team-schedule-1";
@@ -1130,6 +1165,27 @@ export const api = {
         delete mockInviteLinksByRoom[id];
       }
     },
+    getMeetingPurpose: async (roomId: string) => {
+      await delay();
+      return { ...(mockRoomMeetingPurpose[roomId] ?? {}) };
+    },
+    updateMeetingPurpose: async (roomId: string, data: MeetingPurposeSetting) => {
+      await delay();
+      assertRoomMember(roomId);
+      if (data.purpose != null && !isValidMeetingPurpose(data.purpose)) {
+        throw new Error("모임 주목적을 선택해 주세요");
+      }
+      if (data.purpose === "OTHER" && !data.purpose_custom?.trim()) {
+        throw new Error("기타 목적을 입력해 주세요");
+      }
+      const next: MeetingPurposeSetting = {
+        purpose: data.purpose,
+        purpose_custom:
+          data.purpose === "OTHER" ? data.purpose_custom?.trim() : undefined,
+      };
+      mockRoomMeetingPurpose[roomId] = next;
+      return { ...next };
+    },
   },
   appointments: {
     listByRoom: async (roomId: string) => {
@@ -1286,6 +1342,20 @@ export const api = {
         other_times: otherTimes.trim(),
       };
       return buildTeamScheduleWeekBoard(roomId, weekStart);
+    },
+    getMilestones: async (roomId: string) => {
+      await delay();
+      return getTeamMilestones(roomId);
+    },
+    toggleMilestone: async (roomId: string, itemId: string) => {
+      await delay();
+      assertRoomMember(roomId);
+      const items = getTeamMilestones(roomId);
+      const idx = items.findIndex((item) => item.id === itemId);
+      if (idx < 0) throw new Error("마일스톤을 찾을 수 없습니다");
+      items[idx] = { ...items[idx]!, done: !items[idx]!.done };
+      mockTeamMilestones[roomId] = items;
+      return getTeamMilestones(roomId);
     },
   },
   places: {
