@@ -14,8 +14,11 @@ import {
   AppointmentBriefing,
   MeetingSettlement,
   Place,
+  Profile,
   TIER_LABELS,
 } from "@/lib/api";
+import { isGuestSession } from "@/lib/auth-session";
+import { canDeleteContent } from "@/lib/permissions";
 import { formatCountdown, formatDDay } from "@/lib/appointment-time";
 import { formatDate, formatTime } from "@/lib/utils";
 import {
@@ -27,6 +30,7 @@ import {
   MapPin,
   MessageCircle,
   Navigation,
+  Trash2,
 } from "lucide-react";
 
 interface AppointmentBriefingPanelProps {
@@ -35,6 +39,8 @@ interface AppointmentBriefingPanelProps {
   place: Place | null;
   settlement: MeetingSettlement | null;
   isRoomOwner?: boolean;
+  readOnly?: boolean;
+  onRequireAuth?: () => void;
 }
 
 const PUNCTUALITY_LABEL = {
@@ -50,8 +56,11 @@ export function AppointmentBriefingPanel({
   place,
   settlement,
   isRoomOwner,
+  readOnly = isGuestSession(),
+  onRequireAuth,
 }: AppointmentBriefingPanelProps) {
   const [briefing, setBriefing] = useState<AppointmentBriefing | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [posting, setPosting] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -64,6 +73,7 @@ export function AppointmentBriefingPanel({
 
   useEffect(() => {
     reload().catch(() => {});
+    api.profiles.me().then(setProfile).catch(() => {});
     const timer = setInterval(() => {
       reload().catch(() => {});
     }, 60000);
@@ -71,6 +81,10 @@ export function AppointmentBriefingPanel({
   }, [reload]);
 
   const handlePostComment = async () => {
+    if (readOnly) {
+      onRequireAuth?.();
+      return;
+    }
     if (!commentDraft.trim()) return;
     setPosting(true);
     try {
@@ -81,6 +95,16 @@ export function AppointmentBriefingPanel({
       alert(err instanceof Error ? err.message : "댓글 등록 실패");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm("이 댓글을 삭제하시겠습니까?")) return;
+    try {
+      await api.appointments.deleteComment(appointment.id, commentId);
+      await reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "댓글 삭제 실패");
     }
   };
 
@@ -221,9 +245,21 @@ export function AppointmentBriefingPanel({
           ) : (
             briefing.comments.map((c) => (
               <div key={c.id} className="rounded-xl bg-surface/60 px-3 py-2 text-sm">
-                <p className="text-foreground">
-                  <strong>{c.display_name}</strong>: {c.body}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-foreground">
+                    <strong>{c.display_name}</strong>: {c.body}
+                  </p>
+                  {profile && canDeleteContent(Boolean(c.is_me), profile) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteComment(c.id)}
+                      className="shrink-0 text-muted hover:text-warm"
+                      aria-label="댓글 삭제"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
                 <p className="mt-0.5 text-xs text-muted">
                   {new Date(c.created_at).toLocaleTimeString("ko-KR", {
                     hour: "2-digit",
@@ -234,7 +270,7 @@ export function AppointmentBriefingPanel({
             ))
           )}
         </div>
-        {!meetingEnded ? (
+        {!meetingEnded && !readOnly ? (
           <div className="mt-4 flex gap-2">
             <input
               type="text"
@@ -248,6 +284,10 @@ export function AppointmentBriefingPanel({
               등록
             </Button>
           </div>
+        ) : !meetingEnded && readOnly ? (
+          <p className="mt-4 text-sm text-muted">
+            비회원은 댓글을 조회만 할 수 있습니다. 작성하려면 로그인해 주세요.
+          </p>
         ) : (
           <p className="mt-4 text-sm text-muted">
             모임이 종료되어 당일 댓글 입력은 마감되었습니다. 아래 정산/칭찬을 이용하세요.

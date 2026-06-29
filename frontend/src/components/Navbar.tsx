@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Calendar, MapPin, Users, LogOut, Sparkles, UserCircle, Trophy, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 // import { createClient } from "@/lib/supabase/client"; // API 연동 시 복원
-import { useRouter } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: Sparkles },

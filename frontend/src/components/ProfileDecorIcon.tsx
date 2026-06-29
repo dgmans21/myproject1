@@ -7,21 +7,26 @@ interface ProfileDecorIconProps {
   entry: ProfileDecorEntry;
   size?: number;
   className?: string;
-  /** 아이콘 옆 한글 라벨 */
   showLabel?: boolean;
 }
 
-/** 프로필 꾸미기 아이콘 (마이페이지 미리보기 등) */
+/** 프로필 꾸미기 이모지 (마이페이지 미리보기 등) */
 export function ProfileDecorIcon({
   entry,
   size = 20,
   className,
   showLabel = false,
 }: ProfileDecorIconProps) {
-  const Icon = entry.icon;
   return (
     <span className={clsx("inline-flex items-center gap-1.5", className)}>
-      <Icon size={size} className={entry.tintClass} aria-hidden />
+      <span
+        className="leading-none select-none"
+        style={{ fontSize: size }}
+        role="img"
+        aria-label={entry.labelKo}
+      >
+        {entry.emoji}
+      </span>
       {showLabel && <span className="text-sm text-foreground">{entry.labelKo}</span>}
     </span>
   );

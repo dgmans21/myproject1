@@ -9,7 +9,7 @@ import { useRoomStore } from "@/stores/room-store";
 import { api, FriendSummary, RoomCreate } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { DEFAULT_ROOM_ACCENT, ROOM_ACCENT_PRESETS } from "@/lib/room-accent";
-import { Crown, UserPlus, X, Zap } from "lucide-react";
+import { Crown, CalendarDays, UserPlus, X, Zap } from "lucide-react";
 
 interface RoomCreateFormProps {
   onClose: () => void;
@@ -26,7 +26,7 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [roomType, setRoomType] = useState<"ONE_TIME" | "REGULAR">("ONE_TIME");
+  const [roomType, setRoomType] = useState<"ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE">("ONE_TIME");
   const [expireDate, setExpireDate] = useState(defaultExpireDate);
   const [accentColor, setAccentColor] = useState<string>(DEFAULT_ROOM_ACCENT);
   const [useJoinPassword, setUseJoinPassword] = useState(false);
@@ -123,30 +123,42 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">방 유형</p>
-            <div className="flex gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => setRoomType("ONE_TIME")}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
                   roomType === "ONE_TIME"
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-border text-muted hover:border-primary/40"
                 )}
               >
-                <Zap className="h-4 w-4" /> 임시방
+                <Zap className="h-4 w-4 shrink-0" /> 임시방
               </button>
               <button
                 type="button"
                 onClick={() => setRoomType("REGULAR")}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
                   roomType === "REGULAR"
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border text-muted hover:border-primary/40"
                 )}
               >
-                <Crown className="h-4 w-4" /> 고정방
+                <Crown className="h-4 w-4 shrink-0" /> 고정방
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoomType("TEAM_SCHEDULE")}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                  roomType === "TEAM_SCHEDULE"
+                    ? "border-warm bg-warm/10 text-warm"
+                    : "border-border text-muted hover:border-primary/40"
+                )}
+              >
+                <CalendarDays className="h-4 w-4 shrink-0" /> 팀 일정
               </button>
             </div>
           </div>
@@ -158,6 +170,10 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
               value={expireDate}
               onChange={(e) => setExpireDate(e.target.value)}
             />
+          ) : roomType === "TEAM_SCHEDULE" ? (
+            <p className="text-xs text-muted">
+              팀 일정방은 약속 투표 없이 달력·주간 표로 일정을 공유합니다.
+            </p>
           ) : (
             <p className="text-xs text-muted">고정방은 만료일이 없습니다. 3개월 미활동 시 정리됩니다.</p>
           )}

@@ -8,6 +8,7 @@ export const MOCK_ROOMS = [
     room_type: "REGULAR" as const,
     room_status: "ACTIVE" as const,
     is_fixed: true,
+    is_sample: true,
     purpose: "정기 모임",
     member_count: 5,
     last_activity_at: "2026-06-20T10:00:00Z",
@@ -20,11 +21,26 @@ export const MOCK_ROOMS = [
     room_type: "ONE_TIME" as const,
     room_status: "ACTIVE" as const,
     is_fixed: false,
+    is_sample: true,
     expire_at: "2026-12-31T23:59:59Z",
     purpose: "회식",
     member_count: 8,
     last_activity_at: "2026-06-18T14:00:00Z",
     created_at: "2026-06-18T14:00:00Z",
+  },
+  {
+    id: "demo-team-schedule-1",
+    name: "프로젝트 팀 일정",
+    description: "회의·업무 일정 공유",
+    room_type: "TEAM_SCHEDULE" as const,
+    room_status: "ACTIVE" as const,
+    is_fixed: true,
+    is_sample: true,
+    purpose: "팀 일정",
+    member_count: 3,
+    last_activity_at: "2026-06-20T10:00:00Z",
+    created_at: "2026-06-10T10:00:00Z",
+    accent_color: "#6366F1",
   },
 ];
 
@@ -379,6 +395,9 @@ export const MOCK_PROFILE = {
     chinese_zodiac: "MONKEY" as const,
     western_zodiac: "GEMINI" as const,
     blood_type: "A" as const,
+    accent_color: "#818CF8",
+    theme_preset: "ocean" as const,
+    interest_emojis: ["⚽", "🎮"],
   },
   places_adopted_count: 4,
   available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 35),
@@ -408,6 +427,46 @@ export const MOCK_MEMBER_BRIEFING = {
   "demo-member-2": { origin_label: "수원시청", lat: 37.263572, lng: 127.0286, duration_minutes: 48 },
   "demo-member-3": { origin_label: "인천터미널", lat: 37.4482, lng: 126.6535, duration_minutes: 62 },
 } as const;
+
+/** 팀 일정방 — 날짜별 메모 (mock) */
+export const MOCK_TEAM_SCHEDULE_DAY_MEMOS = [
+  {
+    id: "tsm-1",
+    room_id: "demo-team-schedule-1",
+    user_id: "demo-user",
+    display_name: "데모 사용자",
+    schedule_date: "2026-06-23",
+    memo: "오후 2시 스프린트 회의, 배포 전 QA 필요",
+    updated_at: "2026-06-20T09:00:00Z",
+  },
+  {
+    id: "tsm-2",
+    room_id: "demo-team-schedule-1",
+    user_id: "demo-member-2",
+    display_name: "친구 A",
+    schedule_date: "2026-06-23",
+    memo: "오전은 외근, 14시 이후 가능",
+    updated_at: "2026-06-20T10:30:00Z",
+  },
+  {
+    id: "tsm-3",
+    room_id: "demo-team-schedule-1",
+    user_id: "demo-member-3",
+    display_name: "친구 B",
+    schedule_date: "2026-06-25",
+    memo: "디자인 리뷰 + 저녁 스탠드업",
+    updated_at: "2026-06-19T15:00:00Z",
+  },
+  {
+    id: "tsm-4",
+    room_id: "demo-team-schedule-1",
+    user_id: "demo-user",
+    display_name: "데모 사용자",
+    schedule_date: "2026-06-27",
+    memo: "주말 배포 대기 (온콜)",
+    updated_at: "2026-06-18T11:00:00Z",
+  },
+];
 
 export const MOCK_BRIEFING_COMMENTS = [
   {

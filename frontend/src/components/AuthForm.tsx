@@ -5,13 +5,17 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { useRouter } from "next/navigation";
+import { setSessionMode, clearGuestSession } from "@/lib/auth-session";
 
 const AGE_OPTIONS = [
   { value: "TEENS", label: "10대" },
   { value: "TWENTIES", label: "20대" },
   { value: "THIRTIES", label: "30대" },
   { value: "FORTIES", label: "40대" },
-  { value: "FIFTIES_PLUS", label: "50대+" },
+  { value: "FIFTIES", label: "50대" },
+  { value: "SIXTIES", label: "60대" },
+  { value: "SEVENTIES", label: "70대" },
+  { value: "EIGHTIES_plus", label: "80대이상" }, 
 ];
 
 export function AuthForm() {
@@ -31,6 +35,7 @@ export function AuthForm() {
     setError("");
 
     try {
+      clearGuestSession();
       await new Promise((r) => setTimeout(r, 500));
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -116,6 +121,23 @@ export function AuthForm() {
           {loading ? "처리 중..." : isLogin ? "로그인" : "가입하기"}
         </Button>
       </form>
+
+      <div className="mt-4 border-t border-border pt-4">
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full"
+          onClick={() => {
+            setSessionMode("guest");
+            router.push("/groups");
+          }}
+        >
+          로그인 없이 둘러보기 (비회원)
+        </Button>
+        <p className="mt-2 text-center text-xs text-muted">
+          방·일정·리뷰 조회는 가능합니다. 작성·관리는 로그인 후 이용해 주세요.
+        </p>
+      </div>
 
       <p className="mt-4 text-center text-sm text-muted">
         {isLogin ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}

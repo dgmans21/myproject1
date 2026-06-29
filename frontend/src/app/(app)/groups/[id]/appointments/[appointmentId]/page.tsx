@@ -6,7 +6,10 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { VoteMonthCalendar } from "@/components/VoteMonthCalendar";
+import { TeamScheduleBoard, TeamScheduleItem } from "@/components/TeamScheduleBoard";
+import { GuestPromptModal } from "@/components/GuestPromptModal";
+import type { WriteAction } from "@/lib/permissions";
+import { isGuestSession } from "@/lib/auth-session";
 import { PlaceVotePanel } from "@/components/PlaceVotePanel";
 import { AppointmentBriefingPanel } from "@/components/AppointmentBriefingPanel";
 import {
@@ -36,6 +39,15 @@ export default function AppointmentPage() {
   const [selectedSlots, setSelectedSlots] = useState<Map<string, number>>(new Map());
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
+  const [guestPrompt, setGuestPrompt] = useState(false);
+  const [guestAction, setGuestAction] = useState<WriteAction>("schedule_write");
+  const [teamItems, setTeamItems] = useState<TeamScheduleItem[]>([
+    { id: "meeting", label: "회의", done: false },
+    { id: "design", label: "디자인", done: false },
+    { id: "qa", label: "QA", done: false },
+    { id: "deploy", label: "배포", done: false },
+  ]);
+  const readOnly = isGuestSession();
 
   const load = async () => {
     if (!appointmentId) return;
@@ -91,7 +103,16 @@ export default function AppointmentPage() {
     });
   };
 
+  const promptGuest = (action: WriteAction) => {
+    setGuestAction(action);
+    setGuestPrompt(true);
+  };
+
   const submitDateVotes = async () => {
+    if (readOnly) {
+      promptGuest("schedule_write");
+      return;
+    }
     for (const d of selectedDates) {
       await api.appointments.submitDateVote(appointmentId, { vote_date: d, is_available: true });
     }
@@ -104,6 +125,10 @@ export default function AppointmentPage() {
   };
 
   const submitTimeVotes = async () => {
+    if (readOnly) {
+      promptGuest("schedule_write");
+      return;
+    }
     for (const [key, priority] of selectedSlots) {
       const [vote_date, vote_time] = key.split("|");
       await api.appointments.submitTimeVote(appointmentId, { vote_date, vote_time, priority });
@@ -138,7 +163,9 @@ export default function AppointmentPage() {
         </Link>
 
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{appointment.title}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{appointment.title}</h1>
+          </div>
           {appointment.status === "confirmed" ? (
             <p className="mt-1 text-sm text-muted">확정된 약속 · 당일 브리핑</p>
           ) : (
@@ -156,6 +183,8 @@ export default function AppointmentPage() {
               place={confirmedPlace}
               settlement={settlement}
               isRoomOwner={isRoomOwner}
+              readOnly={readOnly}
+              onRequireAuth={() => promptGuest("comment_write")}
             />
           </div>
         )}
@@ -164,13 +193,22 @@ export default function AppointmentPage() {
           <div className="mt-8 space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-foreground">1차 날짜 투표</h2>
-              <p className="mt-1 text-sm text-muted">월간 캘린더에서 가능한 날짜를 선택하세요</p>
+              <p className="mt-1 text-sm text-muted">
+                주간·월간 보기로 팀 일정과 가능한 날짜를 함께 조율하세요
+              </p>
             </div>
 
-            <VoteMonthCalendar
+            <TeamScheduleBoard
               selectedDates={selectedDates}
               onToggleDate={toggleDate}
               voteSummary={dateSummary}
+              teamItems={teamItems}
+              onToggleTeamItem={(tid) =>
+                setTeamItems((prev) =>
+                  prev.map((item) => (item.id === tid ? { ...item, done: !item.done } : item))
+                )
+              }
+              readOnly={readOnly}
             />
 
             <Button onClick={submitDateVotes} disabled={selectedDates.size === 0}>
@@ -291,6 +329,12 @@ export default function AppointmentPage() {
           </div>
         )}
       </main>
+
+      <GuestPromptModal
+        open={guestPrompt}
+        action={guestAction}
+        onClose={() => setGuestPrompt(false)}
+      />
     </div>
   );
 }

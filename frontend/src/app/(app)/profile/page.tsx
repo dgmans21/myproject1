@@ -9,8 +9,11 @@ import { ProfileBadgeBorder, TrustBadge } from "@/components/ProfileBadgeBorder"
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
+import { ProfileThemeShell } from "@/components/ProfileThemeShell";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
+import { ProfileInterestsPanel } from "@/components/ProfileInterestsPanel";
+import { resolveProfileThemeStyle } from "@/lib/profile-theme";
 import { api, Profile, RecommenderTitle, SocialPointTitle } from "@/lib/api";
 import { MBTI_OPTIONS } from "@/lib/mbti";
 
@@ -24,7 +27,7 @@ const AGE_LABELS: Record<string, string> = {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [tab, setTab] = useState<"info" | "decor" | "trust" | "social">("info");
+  const [tab, setTab] = useState<"info" | "decor" | "interests" | "trust" | "social">("info");
   const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [mbtiDraft, setMbtiDraft] = useState<string[]>([]);
@@ -100,23 +103,31 @@ export default function ProfilePage() {
     mbtiDraft.length !== profile.mbti_types.length ||
     mbtiDraft.some((t, i) => profile.mbti_types[i] !== t);
 
+  const profileAccent = resolveProfileThemeStyle(profile.profile_decor).accent;
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="mx-auto max-w-3xl px-4 py-8">
+        <ProfileThemeShell decor={profile.profile_decor}>
         <ProfileBadgeBorder
           borderStyle={activeTrustTitle?.border_style ?? activeSocialTitle?.border_style}
           badgeTier={profile.badge_tier}
         >
-          <Card>
-            <div className="flex items-start justify-between gap-4">
-              <div>
+          <Card className="border-0 bg-transparent p-4 shadow-none sm:p-5">
+            <div className="flex flex-col gap-3">
+              <div className="min-w-0">
                 <CardTitle className="text-xl flex flex-wrap items-center gap-2">
-                  {profile.display_name}
+                  <span style={{ color: profileAccent }}>{profile.display_name}</span>
                   <ProfileDecorBadges decor={profile.profile_decor} size={16} />
                 </CardTitle>
                 <CardDescription className="mt-1">
                   {AGE_LABELS[profile.age_group] ?? profile.age_group} · {profile.residence}
+                  {profile.role === "ADMIN" && (
+                    <span className="ml-2 rounded-md bg-warm/15 px-2 py-0.5 text-xs font-medium text-warm">
+                      관리자
+                    </span>
+                  )}
                 </CardDescription>
                 {profile.mbti_types.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -126,14 +137,24 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-2">
-                {activeTrustTitle && (
-                  <TrustBadge title={activeTrustTitle.title} badgeColor={activeTrustTitle.badge_color} />
-                )}
-                {activeSocialTitle && (
-                  <SocialPointBadge title={activeSocialTitle.title} badgeColor={activeSocialTitle.badge_color} />
-                )}
-              </div>
+              {(activeTrustTitle || activeSocialTitle) && (
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  {activeTrustTitle && (
+                    <TrustBadge
+                      className="max-w-full"
+                      title={activeTrustTitle.title}
+                      badgeColor={activeTrustTitle.badge_color}
+                    />
+                  )}
+                  {activeSocialTitle && (
+                    <SocialPointBadge
+                      className="max-w-full"
+                      title={activeSocialTitle.title}
+                      badgeColor={activeSocialTitle.badge_color}
+                    />
+                  )}
+                </div>
+              )}
             </div>
             <p className="mt-4 text-sm text-muted">
               신뢰도 <strong className="text-foreground">{profile.trust_score}</strong>점
@@ -146,11 +167,13 @@ export default function ProfilePage() {
             </p>
           </Card>
         </ProfileBadgeBorder>
+        </ProfileThemeShell>
 
         <div className="mt-6 flex gap-2 border-b border-border overflow-x-auto">
           {([
             ["info", "프로필"],
             ["decor", "꾸미기"],
+            ["interests", "취미·관심"],
             ["trust", "신뢰 칭호"],
             ["social", "소셜 칭호"],
           ] as const).map(([key, label]) => (
@@ -213,6 +236,10 @@ export default function ProfilePage() {
           />
         )}
 
+        {tab === "interests" && (
+          <ProfileInterestsPanel onUpdated={(p) => setProfile(p)} />
+        )}
+
         {tab === "trust" && (
           <Card className="mt-6">
             <CardTitle className="text-base">신뢰 칭호</CardTitle>
@@ -221,11 +248,18 @@ export default function ProfilePage() {
               {(profile.available_titles ?? []).map((title) => (
                 <div
                   key={title.id}
-                  className="flex items-center justify-between rounded-xl border border-border p-3 gap-2 flex-wrap"
+                  className="flex flex-col gap-2 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <TrustBadge title={title.title} badgeColor={title.badge_color} />
-                  <span className="text-xs text-muted">{title.min_score}점 이상</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <TrustBadge
+                      className="max-w-full"
+                      title={title.title}
+                      badgeColor={title.badge_color}
+                    />
+                    <span className="shrink-0 text-xs text-muted">{title.min_score}점 이상</span>
+                  </div>
                   <Button
+                    className="shrink-0 self-end sm:self-auto"
                     size="sm"
                     variant={profile.selected_title_id === title.id ? "accent" : "secondary"}
                     disabled={saving}
@@ -252,11 +286,18 @@ export default function ProfilePage() {
               {(profile.available_social_titles ?? []).map((title) => (
                 <div
                   key={title.id}
-                  className="flex items-center justify-between rounded-xl border border-border p-3 gap-2 flex-wrap"
+                  className="flex flex-col gap-2 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <SocialPointBadge title={title.title} badgeColor={title.badge_color} />
-                  <span className="text-xs text-muted">{title.min_points}P 이상</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <SocialPointBadge
+                      className="max-w-full"
+                      title={title.title}
+                      badgeColor={title.badge_color}
+                    />
+                    <span className="shrink-0 text-xs text-muted">{title.min_points}P 이상</span>
+                  </div>
                   <Button
+                    className="shrink-0 self-end sm:self-auto"
                     size="sm"
                     variant={profile.selected_social_title_id === title.id ? "accent" : "secondary"}
                     disabled={saving || profile.social_points < title.min_points}

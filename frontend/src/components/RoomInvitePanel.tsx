@@ -103,7 +103,7 @@ export function RoomInvitePanel({ roomId }: RoomInvitePanelProps) {
             )}
           </p>
           <p className="mt-1 text-xs text-muted">
-            실서비스에서는 DB에 해시만 저장하고 서버에서 검증합니다. mock은 메모리에만 보관합니다.
+            초대 없이 입장하려는 사람에게 공유할 수 있습니다.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <Input

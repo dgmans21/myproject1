@@ -111,6 +111,17 @@ interface TrustBadgeProps {
   className?: string;
 }
 
+const TITLE_BADGE_CLASS =
+  "inline-flex max-w-full min-w-0 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight sm:px-2.5 sm:text-xs";
+
+function TrustBadgeLabel({ title }: { title: string }) {
+  return (
+    <span className="truncate" title={title}>
+      {title}
+    </span>
+  );
+}
+
 function SparkleTrustBadge({
   title,
   variant,
@@ -125,7 +136,9 @@ function SparkleTrustBadge({
   return (
     <span
       className={cn(
-        "relative inline-flex items-center overflow-hidden rounded-full px-2.5 py-0.5 text-xs font-bold",
+        "relative overflow-hidden",
+        TITLE_BADGE_CLASS,
+        "font-bold",
         style.shell,
         style.text,
         className
@@ -138,7 +151,9 @@ function SparkleTrustBadge({
         )}
         aria-hidden
       />
-      <span className="relative">{title}</span>
+      <span className="relative min-w-0">
+        <TrustBadgeLabel title={title} />
+      </span>
     </span>
   );
 }
@@ -152,13 +167,10 @@ export function TrustBadge({ title, badgeColor = "#94A3B8", className }: TrustBa
 
   return (
     <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white",
-        className
-      )}
+      className={cn(TITLE_BADGE_CLASS, "text-white", className)}
       style={{ backgroundColor: badgeColor }}
     >
-      {title}
+      <TrustBadgeLabel title={title} />
     </span>
   );
 }

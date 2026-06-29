@@ -14,8 +14,14 @@ import {
   MOCK_ROOM_MEMBERS,
   MOCK_ROOMS,
   MOCK_SETTLEMENT,
+  MOCK_TEAM_SCHEDULE_DAY_MEMOS,
   MOCK_TIME_SUMMARY,
 } from "./mock-data";
+import {
+  slotKey,
+  toDateKey,
+  getWeekStartMonday,
+} from "./team-schedule-utils";
 import {
   isMeetingEnded,
   minutesUntilAppointment,
@@ -23,6 +29,15 @@ import {
 } from "./appointment-time";
 import { SOCIAL_POINT_TITLES } from "./social-points";
 import type { ProfileDecorFields } from "./profile-decor-icons";
+import {
+  isValidProfileThemePreset,
+  PROFILE_THEME_PRESET_IDS,
+} from "./profile-decor-icons";
+import { normalizeInterestEmojis } from "./profile-interests";
+import { isValidRoomAccent } from "./room-accent";
+import { defaultInviteExpiry, generateInviteToken } from "./invite-token";
+
+const SAMPLE_ROOM_IDS = new Set(["demo-room-1", "demo-room-2", "demo-room-invite-pending", "demo-team-schedule-1"]);
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
@@ -86,12 +101,14 @@ function cloneRoomMembers(roomId: string): RoomMember[] {
   return base.map((m) => ({
     ...m,
     social_points: mockMemberPoints[m.user_id] ?? m.social_points,
-  }));
+    role: m.role as RoomMember["role"],
+  })) as RoomMember[];
 }
 
 let mockRoomMembersState: Record<string, RoomMember[]> = {
   "demo-room-1": cloneRoomMembers("demo-room-1"),
   "demo-room-2": cloneRoomMembers("demo-room-2"),
+  "demo-team-schedule-1": cloneRoomMembers("demo-team-schedule-1"),
   [MOCK_DISCOVERABLE_ROOM.id]: [
     {
       user_id: "demo-member-2",
@@ -119,12 +136,71 @@ let mockRoomMembersState: Record<string, RoomMember[]> = {
 let mockHostTransferPending: Record<string, HostTransferPending> = {};
 let mockRecommendationVotes: Record<string, "RECOMMEND" | "NOT_RECOMMEND"> = {};
 let mockPlaceReviews: Record<string, string> = {};
-let mockPlaceReviewsList: Record<
-  string,
-  Array<Omit<PlaceReviewItem, "is_me">>
-> = Object.fromEntries(
+let mockPlaceReviewsList: Record<string, Omit<PlaceReviewItem, "is_me">[]> = Object.fromEntries(
   Object.entries(MOCK_PLACE_REVIEWS).map(([id, rows]) => [id, rows.map((r) => ({ ...r }))])
-);
+) as Record<string, Omit<PlaceReviewItem, "is_me">[]>;
+
+interface MockInviteLink {
+  room_id: string;
+  token: string;
+  expires_at: string;
+  created_by: string;
+}
+
+let mockInviteLinksByRoom: Record<string, MockInviteLink> = {};
+let mockInviteTokenIndex: Record<string, string> = {};
+
+function ensureInviteLink(roomId: string): MockInviteLink {
+  const existing = mockInviteLinksByRoom[roomId];
+  if (existing && new Date(existing.expires_at) > new Date()) return existing;
+
+  const token = generateInviteToken();
+  const link: MockInviteLink = {
+    room_id: roomId,
+    token,
+    expires_at: defaultInviteExpiry(14),
+    created_by: mockProfile.id,
+  };
+  if (existing) delete mockInviteTokenIndex[existing.token];
+  mockInviteLinksByRoom[roomId] = link;
+  mockInviteTokenIndex[token] = roomId;
+  return link;
+}
+
+function previewInviteTokenInternal(token: string): InviteTokenPreview {
+  const roomId = mockInviteTokenIndex[token.trim()];
+  if (!roomId) throw new Error("유효하지 않거나 만료된 초대 링크입니다");
+  const link = mockInviteLinksByRoom[roomId];
+  const room = getCatalogRoom(roomId) ?? mockRooms.find((r) => r.id === roomId);
+  if (!room || !link) throw new Error("방을 찾을 수 없습니다");
+  const expired = new Date(link.expires_at) <= new Date();
+  return {
+    room_id: roomId,
+    room_name: room.name,
+    expires_at: link.expires_at,
+    expired,
+    is_member: isRoomMember(roomId, mockProfile.id),
+    requires_join_password: roomHasJoinPassword(roomId),
+  };
+}
+
+function assertRoomOwner(roomId: string) {
+  const members = getRoomMembers(roomId);
+  const owner = getRoomOwner(members);
+  if (!owner || owner.user_id !== mockProfile.id) {
+    throw new Error("방장만 이 작업을 할 수 있습니다");
+  }
+}
+
+function enrichRoomMeta(room: Room): Room {
+  const members = mockRoomMembersState[room.id] ?? cloneRoomMembers(room.id);
+  const owner = members.find((m) => m.role === "OWNER");
+  return attachRoomAccessMeta({
+    ...room,
+    is_me_owner: owner?.user_id === mockProfile.id,
+    is_sample: room.is_sample ?? SAMPLE_ROOM_IDS.has(room.id),
+  });
+}
 
 type InvitationStatus = "pending" | "accepted" | "rejected";
 
@@ -212,6 +288,18 @@ function getRoomMembers(roomId: string): RoomMember[] {
   return mockRoomMembersState[roomId];
 }
 
+function validateProfileDecor(decor: ProfileDecorFields): void {
+  if (decor.accent_color != null && !isValidRoomAccent(decor.accent_color)) {
+    throw new Error("강조색 형식이 올바르지 않습니다 (#RRGGBB)");
+  }
+  if (decor.theme_preset != null && !isValidProfileThemePreset(decor.theme_preset)) {
+    throw new Error(`테마는 ${PROFILE_THEME_PRESET_IDS.join(", ")} 중 하나여야 합니다`);
+  }
+  if (decor.interest_emojis != null) {
+    decor.interest_emojis = normalizeInterestEmojis(decor.interest_emojis);
+  }
+}
+
 function syncMemberDecor(userId: string, decor?: ProfileDecorFields) {
   for (const roomId of Object.keys(mockRoomMembersState)) {
     mockRoomMembersState[roomId] = getRoomMembers(roomId).map((m) =>
@@ -238,6 +326,7 @@ function enrichPlace(p: Place): Place {
     my_rating: mockUserRatings[p.id],
     my_review: mockPlaceReviews[p.id],
     my_recommendation_vote: mockRecommendationVotes[p.id],
+    is_sample: p.is_sample ?? p.id.startsWith("demo-place"),
   };
 }
 
@@ -487,6 +576,101 @@ function inviteOneMember(roomId: string, inviteeId: string) {
   return friend?.display_name ?? inviteeId;
 }
 
+export interface TeamScheduleDayMemo {
+  id: string;
+  room_id: string;
+  user_id: string;
+  display_name: string;
+  schedule_date: string;
+  memo: string;
+  updated_at: string;
+}
+
+export interface TeamScheduleMemberWeek {
+  user_id: string;
+  display_name: string;
+  is_me: boolean;
+  slots: Record<string, boolean>;
+  other_times: string;
+}
+
+export interface TeamScheduleWeekBoard {
+  room_id: string;
+  week_start: string;
+  members: TeamScheduleMemberWeek[];
+  slot_counts: Record<string, number>;
+}
+
+type TeamScheduleWeekStore = {
+  slots: Record<string, boolean>;
+  other_times: string;
+};
+
+function teamWeekKey(roomId: string, weekStart: string, userId: string): string {
+  return `${roomId}|${weekStart}|${userId}`;
+}
+
+let mockTeamScheduleMemos: TeamScheduleDayMemo[] = MOCK_TEAM_SCHEDULE_DAY_MEMOS.map((m) => ({ ...m }));
+let mockTeamScheduleWeek: Record<string, TeamScheduleWeekStore> = {};
+
+function seedTeamScheduleWeekDemo() {
+  const roomId = "demo-team-schedule-1";
+  const weekStart = "2026-06-23";
+  mockTeamScheduleWeek[teamWeekKey(roomId, weekStart, "demo-user")] = {
+    slots: {
+      [slotKey("2026-06-23", 10)]: true,
+      [slotKey("2026-06-23", 14)]: true,
+      [slotKey("2026-06-24", 9)]: true,
+      [slotKey("2026-06-25", 15)]: true,
+    },
+    other_times: "수요일 07:30 잠깐 가능",
+  };
+  mockTeamScheduleWeek[teamWeekKey(roomId, weekStart, "demo-member-2")] = {
+    slots: {
+      [slotKey("2026-06-23", 14)]: true,
+      [slotKey("2026-06-23", 15)]: true,
+      [slotKey("2026-06-26", 11)]: true,
+    },
+    other_times: "",
+  };
+  mockTeamScheduleWeek[teamWeekKey(roomId, weekStart, "demo-member-3")] = {
+    slots: {
+      [slotKey("2026-06-24", 13)]: true,
+      [slotKey("2026-06-25", 10)]: true,
+      [slotKey("2026-06-25", 11)]: true,
+    },
+    other_times: "금요일 20시 이후",
+  };
+}
+
+seedTeamScheduleWeekDemo();
+
+function buildTeamScheduleWeekBoard(roomId: string, weekStart: string): TeamScheduleWeekBoard {
+  const members = getRoomMembers(roomId).map((m) => {
+    const stored = mockTeamScheduleWeek[teamWeekKey(roomId, weekStart, m.user_id)];
+    return {
+      user_id: m.user_id,
+      display_name: m.display_name,
+      is_me: Boolean(m.is_me),
+      slots: stored?.slots ?? {},
+      other_times: stored?.other_times ?? "",
+    };
+  });
+  const slot_counts: Record<string, number> = {};
+  for (const m of members) {
+    for (const [key, on] of Object.entries(m.slots)) {
+      if (on) slot_counts[key] = (slot_counts[key] ?? 0) + 1;
+    }
+  }
+  return { room_id: roomId, week_start: weekStart, members, slot_counts };
+}
+
+function assertRoomMember(roomId: string) {
+  if (!isRoomMember(roomId, mockProfile.id)) {
+    throw new Error("방 멤버만 일정을 작성할 수 있습니다");
+  }
+}
+
 export const api = {
   friends: {
     list: async () => {
@@ -526,6 +710,7 @@ export const api = {
       const { profile_decor, ...rest } = data;
       mockProfile = { ...mockProfile, ...rest };
       if (profile_decor !== undefined) {
+        validateProfileDecor(profile_decor);
         mockProfile.profile_decor = { ...mockProfile.profile_decor, ...profile_decor };
         syncMemberDecor(mockProfile.id, mockProfile.profile_decor);
       }
@@ -547,13 +732,13 @@ export const api = {
   rooms: {
     list: async () => {
       await delay();
-      return mockRooms.map(attachRoomAccessMeta);
+      return mockRooms.map(enrichRoomMeta);
     },
     get: async (id: string) => {
       await delay();
       const r = mockRooms.find((x) => x.id === id);
       if (!r) throw new Error("방을 찾을 수 없습니다");
-      return attachRoomAccessMeta(r);
+      return enrichRoomMeta(r);
     },
     activityHeatmap: async (_id: string) => {
       await delay();
@@ -564,10 +749,10 @@ export const api = {
     },
     create: async (data: RoomCreate) => {
       await delay();
-      if (data.room_type !== "REGULAR" && !data.expire_date) {
+      if (data.room_type !== "REGULAR" && data.room_type !== "TEAM_SCHEDULE" && !data.expire_date) {
         throw new Error("임시방은 터트릴 날짜(만료일)를 지정해야 합니다");
       }
-      const isFixed = data.room_type === "REGULAR";
+      const isFixed = data.room_type === "REGULAR" || data.room_type === "TEAM_SCHEDULE";
       const room: Room = {
         id: `demo-room-${Date.now()}`,
         name: data.name,
@@ -602,7 +787,53 @@ export const api = {
           is_me: true,
         },
       ];
-      return attachRoomAccessMeta(room);
+      ensureInviteLink(room.id);
+      return enrichRoomMeta(room);
+    },
+    getInviteLink: async (roomId: string) => {
+      await delay();
+      assertRoomOwner(roomId);
+      const link = ensureInviteLink(roomId);
+      return {
+        room_id: roomId,
+        token: link.token,
+        expires_at: link.expires_at,
+        url: `/join/${link.token}`,
+      } satisfies InviteLinkInfo;
+    },
+    regenerateInviteLink: async (roomId: string) => {
+      await delay();
+      assertRoomOwner(roomId);
+      const old = mockInviteLinksByRoom[roomId];
+      if (old) delete mockInviteTokenIndex[old.token];
+      delete mockInviteLinksByRoom[roomId];
+      const link = ensureInviteLink(roomId);
+      return {
+        room_id: roomId,
+        token: link.token,
+        expires_at: link.expires_at,
+        url: `/join/${link.token}`,
+      } satisfies InviteLinkInfo;
+    },
+    previewInviteToken: async (token: string) => {
+      await delay();
+      return previewInviteTokenInternal(token);
+    },
+    joinByInviteToken: async (token: string) => {
+      await delay();
+      const preview = previewInviteTokenInternal(token);
+      if (preview.expired) {
+        throw new Error("만료된 초대 링크입니다. 방장에게 새 링크를 요청하세요");
+      }
+      if (preview.is_member) {
+        const existing = mockRooms.find((r) => r.id === preview.room_id);
+        if (!existing) throw new Error("방을 찾을 수 없습니다");
+        return { ok: true, room: enrichRoomMeta(existing) };
+      }
+      addCurrentUserToRoom(preview.room_id);
+      const room = mockRooms.find((r) => r.id === preview.room_id);
+      if (!room) throw new Error("방을 찾을 수 없습니다");
+      return { ok: true, room: enrichRoomMeta(room) };
     },
     previewJoin: async (roomId: string) => {
       await delay();
@@ -876,14 +1107,28 @@ export const api = {
     },
     promote: async (id: string) => {
       await delay();
+      assertRoomOwner(id);
       mockRooms = mockRooms.map((r) =>
-        r.id === id ? { ...r, room_type: "REGULAR" as const } : r
+        r.id === id ? { ...r, room_type: "REGULAR" as const, is_fixed: true } : r
       );
-      return mockRooms.find((r) => r.id === id)!;
+      const updated = mockRooms.find((r) => r.id === id)!;
+      return enrichRoomMeta(updated);
     },
     delete: async (id: string) => {
       await delay();
+      assertRoomOwner(id);
+      const room = mockRooms.find((r) => r.id === id);
+      if (!room) throw new Error("방을 찾을 수 없습니다");
+      if (room.room_type !== "ONE_TIME") {
+        throw new Error("임시방만 삭제할 수 있습니다. 고정방은 보관 정책이 적용됩니다");
+      }
       mockRooms = mockRooms.filter((r) => r.id !== id);
+      delete mockRoomMembersState[id];
+      const link = mockInviteLinksByRoom[id];
+      if (link) {
+        delete mockInviteTokenIndex[link.token];
+        delete mockInviteLinksByRoom[id];
+      }
     },
   },
   appointments: {
@@ -958,6 +1203,17 @@ export const api = {
       mockBriefingComments[id].push(comment);
       return comment;
     },
+    deleteComment: async (appointmentId: string, commentId: string) => {
+      await delay();
+      const list = mockBriefingComments[appointmentId] ?? [];
+      const target = list.find((c) => c.id === commentId);
+      if (!target) throw new Error("댓글을 찾을 수 없습니다");
+      if (target.user_id !== mockProfile.id && mockProfile.role !== "ADMIN") {
+        throw new Error("삭제 권한이 없습니다");
+      }
+      mockBriefingComments[appointmentId] = list.filter((c) => c.id !== commentId);
+      return { ok: true };
+    },
     setDepartureStatus: async (id: string, status: DepartureStatus) => {
       await delay();
       if (!mockDepartureStatus[id]) mockDepartureStatus[id] = {};
@@ -967,6 +1223,69 @@ export const api = {
     settlement: async (_id: string) => {
       await delay();
       return MOCK_SETTLEMENT as MeetingSettlement;
+    },
+  },
+  teamSchedule: {
+    listMonthMemos: async (roomId: string, year: number, month: number) => {
+      await delay();
+      const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+      return mockTeamScheduleMemos
+        .filter((m) => m.room_id === roomId && m.schedule_date.startsWith(monthPrefix))
+        .sort((a, b) => a.schedule_date.localeCompare(b.schedule_date));
+    },
+    upsertDayMemo: async (roomId: string, scheduleDate: string, memo: string) => {
+      await delay();
+      assertRoomMember(roomId);
+      const trimmed = memo.trim();
+      const existingIdx = mockTeamScheduleMemos.findIndex(
+        (m) =>
+          m.room_id === roomId &&
+          m.schedule_date === scheduleDate &&
+          m.user_id === mockProfile.id
+      );
+      if (!trimmed) {
+        if (existingIdx >= 0) mockTeamScheduleMemos.splice(existingIdx, 1);
+        return null;
+      }
+      const now = new Date().toISOString();
+      if (existingIdx >= 0) {
+        mockTeamScheduleMemos[existingIdx] = {
+          ...mockTeamScheduleMemos[existingIdx]!,
+          memo: trimmed,
+          updated_at: now,
+        };
+        return mockTeamScheduleMemos[existingIdx]!;
+      }
+      const entry: TeamScheduleDayMemo = {
+        id: `tsm-${Date.now()}`,
+        room_id: roomId,
+        user_id: mockProfile.id,
+        display_name: mockProfile.display_name,
+        schedule_date: scheduleDate,
+        memo: trimmed,
+        updated_at: now,
+      };
+      mockTeamScheduleMemos.push(entry);
+      return entry;
+    },
+    getWeekBoard: async (roomId: string, weekStart?: string) => {
+      await delay();
+      const start = weekStart ?? toDateKey(getWeekStartMonday());
+      return buildTeamScheduleWeekBoard(roomId, start);
+    },
+    saveMyWeek: async (
+      roomId: string,
+      weekStart: string,
+      slots: Record<string, boolean>,
+      otherTimes: string
+    ) => {
+      await delay();
+      assertRoomMember(roomId);
+      mockTeamScheduleWeek[teamWeekKey(roomId, weekStart, mockProfile.id)] = {
+        slots: { ...slots },
+        other_times: otherTimes.trim(),
+      };
+      return buildTeamScheduleWeekBoard(roomId, weekStart);
     },
   },
   places: {
@@ -1016,6 +1335,21 @@ export const api = {
         reviews,
         review_count: reviews.filter((r) => r.review.trim()).length,
       };
+    },
+    deleteReview: async (placeId: string, userId: string) => {
+      await delay();
+      const list = mockPlaceReviewsList[placeId] ?? [];
+      const target = list.find((r) => r.user_id === userId);
+      if (!target) throw new Error("리뷰를 찾을 수 없습니다");
+      if (userId !== mockProfile.id && mockProfile.role !== "ADMIN") {
+        throw new Error("삭제 권한이 없습니다");
+      }
+      mockPlaceReviewsList[placeId] = list.filter((r) => r.user_id !== userId);
+      if (userId === mockProfile.id) {
+        delete mockPlaceReviews[placeId];
+        delete mockUserRatings[placeId];
+      }
+      return { ok: true };
     },
     voteRecommendation: async (id: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {
       await delay();
@@ -1090,7 +1424,7 @@ export interface Room {
   id: string;
   name: string;
   description?: string;
-  room_type: "ONE_TIME" | "REGULAR";
+  room_type: "ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE";
   room_status: "ACTIVE" | "ARCHIVED";
   purpose?: string;
   is_fixed: boolean;
@@ -1101,13 +1435,33 @@ export interface Room {
   accent_color?: string;
   /** 입장 시 비밀번호 필요 여부 (평문 비밀번호는 절대 내려보내지 않음) */
   requires_join_password?: boolean;
+  /** 현재 사용자가 방장인지 */
+  is_me_owner?: boolean;
+  /** 예시(mock) 데이터 여부 */
+  is_sample?: boolean;
+}
+
+export interface InviteLinkInfo {
+  room_id: string;
+  token: string;
+  expires_at: string;
+  url: string;
+}
+
+export interface InviteTokenPreview {
+  room_id: string;
+  room_name: string;
+  expires_at: string;
+  expired: boolean;
+  is_member: boolean;
+  requires_join_password: boolean;
 }
 
 export interface RoomCreate {
   name: string;
   description?: string;
   purpose?: string;
-  room_type?: "ONE_TIME" | "REGULAR";
+  room_type?: "ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE";
   expire_date?: string;
   accent_color?: string;
   /** mock·실API 모두 서버/DB에서만 검증 — 클라이언트 저장 금지 */
@@ -1300,6 +1654,7 @@ export interface Place {
   my_rating?: number;
   my_review?: string;
   my_recommendation_vote?: "RECOMMEND" | "NOT_RECOMMEND" | null;
+  is_sample?: boolean;
 }
 
 export interface PlaceReviewItem {
@@ -1377,9 +1732,14 @@ export const STATUS_LABELS: Record<string, string> = {
 export const ROOM_TYPE_LABELS: Record<string, string> = {
   ONE_TIME: "한 번 만나기",
   REGULAR: "정식 그룹",
+  TEAM_SCHEDULE: "팀 일정",
 };
 
 export const ROOM_STATUS_LABELS: Record<string, string> = {
   ACTIVE: "사용 중",
   ARCHIVED: "보관됨",
 };
+
+["demo-room-1", "demo-room-2", "demo-team-schedule-1"].forEach((id) => {
+  if (mockRooms.some((r) => r.id === id)) ensureInviteLink(id);
+});

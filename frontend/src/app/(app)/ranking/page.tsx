@@ -73,7 +73,7 @@ export default function RankingPage() {
                     </p>
                     {entry.selected_title && (
                       <TrustBadge
-                        className="mt-2"
+                        className="mt-2 max-w-full"
                         title={entry.selected_title}
                         badgeColor={entry.badge_color}
                       />
@@ -114,6 +114,7 @@ export default function RankingPage() {
                         <td className="py-3 pr-4">
                           {entry.selected_title ? (
                             <TrustBadge
+                              className="max-w-[9rem] sm:max-w-full"
                               title={entry.selected_title}
                               badgeColor={entry.badge_color}
                             />

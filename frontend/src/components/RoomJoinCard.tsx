@@ -56,16 +56,14 @@ export function RoomJoinCard() {
         <KeyRound className="h-4 w-4 text-primary" /> 비밀번호로 방 참가
       </CardTitle>
       <CardDescription className="mt-1">
-        방 ID와 비밀번호를 입력하세요. 데모:{" "}
-        <code className="text-xs">demo-room-invite-pending</code> /{" "}
-        <code className="text-xs">study2024</code>
+        방장이 알려준 방 ID와 입장 비밀번호를 입력하세요.
       </CardDescription>
       <div className="mt-4 space-y-3">
         <Input
-          label="방 ID"
+          label="방 이름"
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
-          placeholder="demo-room-invite-pending"
+          placeholder="방 이름"
         />
         {preview && (
           <p className="text-xs text-muted">

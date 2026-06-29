@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
+import { RatingDisplay } from "@/components/RatingDisplay";
+import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +16,8 @@ import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
 import { geocodeAddress } from "@/lib/kakao-map";
 import { formatPlaceRating, PLACE_RATING_OPTIONS } from "@/lib/place-ratings";
+import { isGuestSession } from "@/lib/auth-session";
+import type { WriteAction } from "@/lib/permissions";
 import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare } from "lucide-react";
 
 export default function PlacesPage() {
@@ -36,6 +40,17 @@ export default function PlacesPage() {
     placeId: string;
     placeName: string;
   } | null>(null);
+  const [guestPrompt, setGuestPrompt] = useState(false);
+  const [guestAction, setGuestAction] = useState<WriteAction>("review_write");
+
+  const requireMember = (action: WriteAction, fn: () => void) => {
+    if (isGuestSession()) {
+      setGuestAction(action);
+      setGuestPrompt(true);
+      return;
+    }
+    fn();
+  };
 
   const loadQuota = useCallback(async () => {
     try {
@@ -64,10 +79,10 @@ export default function PlacesPage() {
       if (result) {
         setCoords({ lat: result.lat, lng: result.lng });
       } else {
-        alert("주소를 찾을 수 없습니다. Kakao Maps JavaScript 키를 확인하세요.");
+        alert("주소를 찾을 수 없습니다.");
       }
     } catch {
-      alert("주소 검색에 실패했습니다. NEXT_PUBLIC_KAKAO_MAP_KEY 설정을 확인하세요.");
+      alert("주소 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setGeocoding(false);
     }
@@ -160,7 +175,7 @@ export default function PlacesPage() {
                 <Map className="h-4 w-4" /> 지도로 보기
               </Button>
             </Link>
-            <Button onClick={() => setShowAdd(!showAdd)}>
+            <Button onClick={() => requireMember("review_write", () => setShowAdd(!showAdd))}>
               <Plus className="h-4 w-4" /> 장소 등록
             </Button>
           </div>
@@ -182,7 +197,7 @@ export default function PlacesPage() {
                 <Input label="주소" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="서울시 강남구..." />
                 <div className="flex items-center gap-3">
                   <Button type="button" size="sm" variant="secondary" onClick={handleGeocode} disabled={geocoding}>
-                    {geocoding ? "검색 중..." : "주소 → 좌표 (services)"}
+                    {geocoding ? "검색 중..." : "주소 검색"}
                   </Button>
                   {coords && (
                     <span className="text-xs text-muted">
@@ -243,10 +258,9 @@ export default function PlacesPage() {
                   <Badge variant="tier" tier={place.tier}>
                     {TIER_LABELS[place.tier]}
                   </Badge>
-                  <div className="flex items-center gap-1 text-sm">
-                    <Star className="h-4 w-4 fill-warm text-warm" />
-                    <span className="font-medium">{place.avg_rating.toFixed(1)}</span>
-                    <span className="text-muted">({place.rating_count})</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <RatingDisplay value={place.avg_rating} size="sm" />
+                    <span className="text-xs text-muted">({place.rating_count}명)</span>
                   </div>
                 </div>
                 <CardTitle className="mt-3">{place.name}</CardTitle>
@@ -276,14 +290,14 @@ export default function PlacesPage() {
                   <Button
                     size="sm"
                     variant={place.my_recommendation_vote === "RECOMMEND" ? "primary" : "secondary"}
-                    onClick={() => handleRecommendation(place.id, "RECOMMEND")}
+                    onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "RECOMMEND"))}
                   >
                     <ThumbsUp className="h-3.5 w-3.5" /> 추천
                   </Button>
                   <Button
                     size="sm"
                     variant={place.my_recommendation_vote === "NOT_RECOMMEND" ? "accent" : "ghost"}
-                    onClick={() => handleRecommendation(place.id, "NOT_RECOMMEND")}
+                    onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "NOT_RECOMMEND"))}
                   >
                     <ThumbsDown className="h-3.5 w-3.5" /> 비추천
                   </Button>
@@ -330,7 +344,7 @@ export default function PlacesPage() {
                     <Button size="sm" onClick={() => handleRate(place.id)}>평가</Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => openRating(place)}>
+                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => requireMember("review_write", () => openRating(place))}>
                     <Star className="h-3.5 w-3.5" /> {place.my_rating != null ? "평가 수정" : "평가하기"}
                   </Button>
                 )}
@@ -355,6 +369,13 @@ export default function PlacesPage() {
         placeId={reviewsModal?.placeId ?? null}
         placeName={reviewsModal?.placeName}
         onClose={() => setReviewsModal(null)}
+        onChanged={() => api.places.list().then(setPlaces).catch(() => {})}
+      />
+
+      <GuestPromptModal
+        open={guestPrompt}
+        action={guestAction}
+        onClose={() => setGuestPrompt(false)}
       />
     </div>
   );

@@ -4,15 +4,17 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
-import { api, PlaceReviewsResponse } from "@/lib/api";
-import { formatPlaceRating } from "@/lib/place-ratings";
-import { MessageSquare, Star, X } from "lucide-react";
+import { RatingDisplay } from "@/components/RatingDisplay";
+import { api, PlaceReviewItem, PlaceReviewsResponse, Profile } from "@/lib/api";
+import { canDeleteContent } from "@/lib/permissions";
+import { MessageSquare, Star, Trash2, X } from "lucide-react";
 
 interface PlaceReviewsModalProps {
   open: boolean;
   placeId: string | null;
   placeName?: string;
   onClose: () => void;
+  onChanged?: () => void;
 }
 
 function formatReviewDate(iso: string) {
@@ -27,27 +29,35 @@ function formatReviewDate(iso: string) {
   }
 }
 
-/** 장소 리뷰 목록 — 페이지 이동 없이 모달 (mock · 실API `GET /places/{id}/reviews` 대응) */
+/** 장소 리뷰 목록 — 페이지 이동 없이 모달 */
 export function PlaceReviewsModal({
   open,
   placeId,
   placeName,
   onClose,
+  onChanged,
 }: PlaceReviewsModalProps) {
   const [data, setData] = useState<PlaceReviewsResponse | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!open || !placeId) {
-      setData(null);
-      return;
-    }
+  const reload = () => {
+    if (!placeId) return;
     setLoading(true);
     api.places
       .listReviews(placeId)
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!open || !placeId) {
+      setData(null);
+      return;
+    }
+    reload();
+    api.profiles.me().then(setProfile).catch(() => {});
   }, [open, placeId]);
 
   useEffect(() => {
@@ -58,6 +68,18 @@ export function PlaceReviewsModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  const handleDelete = async (review: PlaceReviewItem) => {
+    if (!placeId || !profile) return;
+    if (!confirm("이 리뷰를 삭제하시겠습니까?")) return;
+    try {
+      await api.places.deleteReview(placeId, review.user_id);
+      reload();
+      onChanged?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "삭제 실패");
+    }
+  };
 
   if (!open || !placeId) return null;
 
@@ -117,16 +139,23 @@ export function PlaceReviewsModal({
                         <span className="text-[10px] font-normal text-muted">(나)</span>
                       )}
                     </span>
-                    <span className="inline-flex items-center gap-0.5 text-xs text-warm">
-                      <Star className="h-3 w-3 fill-warm" />
-                      {formatPlaceRating(r.rating)}
-                    </span>
+                    <RatingDisplay value={r.rating} size="sm" showNumeric={false} />
                     {r.mbti_types?.map((t) => (
                       <MbtiBadge key={t} type={t} />
                     ))}
                     <span className="text-[10px] text-muted ml-auto">
                       {formatReviewDate(r.created_at)}
                     </span>
+                    {profile && canDeleteContent(r.is_me, profile) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(r)}
+                        className="text-muted hover:text-warm"
+                        aria-label="리뷰 삭제"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                   <p className="mt-2 text-sm text-foreground leading-relaxed">{r.review}</p>
                 </li>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { MbtiBadge } from "@/components/MbtiBadge";
-import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
+import { ProfileDecorBadges, MEMBER_DECOR_DISPLAY_LIMIT } from "@/components/ProfileDecorBadges";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { api, PraiseSticker, PraiseVoteStatus, RoomMember } from "@/lib/api";
 import { PRAISE_STICKER_LABELS } from "@/lib/social-points";
@@ -135,17 +135,24 @@ export function RoomPraisePanel({ roomId, appointmentId, isOwner }: RoomPraisePa
         <p className="text-sm font-medium text-foreground">멤버 소셜 포인트</p>
         <ul className="mt-2 space-y-2">
           {members.filter((m) => !m.is_me).map((m) => (
-            <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="font-medium inline-flex items-center gap-1.5">
+            <li key={m.user_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                 {m.display_name}
-                <ProfileDecorBadges decor={m.profile_decor} />
+                <ProfileDecorBadges
+                  decor={m.profile_decor}
+                  maxItems={MEMBER_DECOR_DISPLAY_LIMIT}
+                />
               </span>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {m.mbti_types.map((t) => (
                   <MbtiBadge key={t} type={t} />
                 ))}
                 {m.social_title && (
-                  <SocialPointBadge title={m.social_title} badgeColor={m.social_badge_color} />
+                  <SocialPointBadge
+                    className="max-w-full"
+                    title={m.social_title}
+                    badgeColor={m.social_badge_color}
+                  />
                 )}
                 <span className="text-muted">{m.social_points}P</span>
                 {isOwner && (

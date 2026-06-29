@@ -8,14 +8,18 @@ import { Badge } from "@/components/ui/Badge";
 import { RoomCreateForm } from "@/components/RoomCreateForm";
 import { PendingInvitationsCard } from "@/components/PendingInvitationsCard";
 import { RoomJoinCard } from "@/components/RoomJoinCard";
+import { RoomActionMenu } from "@/components/RoomActionMenu";
+import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { api, ROOM_TYPE_LABELS } from "@/lib/api";
+import { isGuestSession } from "@/lib/auth-session";
 import { useRoomStore } from "@/stores/room-store";
-import { Plus, Users, Crown, Trash2 } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupsPage() {
   const { rooms, loading, fetchRooms, updateRoom, removeRoom } = useRoomStore();
   const [showCreate, setShowCreate] = useState(false);
+  const [guestPrompt, setGuestPrompt] = useState(false);
   const createFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,13 +44,16 @@ export default function GroupsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("한 번 만나기 방을 삭제하시겠습니까?")) return;
-    try {
-      await api.rooms.delete(id);
-      removeRoom(id);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "삭제 실패");
+    await api.rooms.delete(id);
+    removeRoom(id);
+  };
+
+  const openCreate = () => {
+    if (isGuestSession()) {
+      setGuestPrompt(true);
+      return;
     }
+    setShowCreate((open) => !open);
   };
 
   return (
@@ -58,7 +65,7 @@ export default function GroupsPage() {
             <h1 className="text-2xl font-bold text-foreground">방</h1>
             <p className="mt-1 text-muted">임시방 · 고정방 · 3개월 약속 없으면 보관</p>
           </div>
-          <Button onClick={() => setShowCreate((open) => !open)}>
+          <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
             {showCreate ? "닫기" : "새 방"}
           </Button>
@@ -93,12 +100,29 @@ export default function GroupsPage() {
                     : undefined
                 }
               >
+                <div className="absolute right-3 top-3 z-10">
+                  <RoomActionMenu
+                    room={room}
+                    onPromote={handlePromote}
+                    onDelete={handleDelete}
+                  />
+                </div>
                 <Link href={`/groups/${room.id}`}>
-                  <div className="flex items-start justify-between">
-                    <Badge variant={room.room_type === "REGULAR" ? "primary" : "warm"}>
-                      {ROOM_TYPE_LABELS[room.room_type]}
-                    </Badge>
-                    <span className="flex items-center gap-1 text-xs text-muted">
+                  <div className="flex items-start justify-between gap-8 pr-8">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          room.room_type === "TEAM_SCHEDULE"
+                            ? "accent"
+                            : room.room_type === "REGULAR"
+                              ? "primary"
+                              : "warm"
+                        }
+                      >
+                        {ROOM_TYPE_LABELS[room.room_type]}
+                      </Badge>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
                       <Users className="h-3.5 w-3.5" />
                       {room.member_count}명
                     </span>
@@ -111,24 +135,17 @@ export default function GroupsPage() {
                     </p>
                   )}
                 </Link>
-                <div className="mt-4 flex gap-2">
-                  {room.room_type === "ONE_TIME" && (
-                    <>
-                      <Button size="sm" variant="secondary" onClick={() => handlePromote(room.id)}>
-                        <Crown className="h-3.5 w-3.5" />
-                        승격
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(room.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
-                </div>
               </Card>
             ))
           )}
         </div>
       </main>
+
+      <GuestPromptModal
+        open={guestPrompt}
+        action="room_manage"
+        onClose={() => setGuestPrompt(false)}
+      />
     </div>
   );
 }

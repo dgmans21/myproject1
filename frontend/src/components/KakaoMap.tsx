@@ -141,7 +141,6 @@ export function KakaoMap({
     }
   }, [ready, markers, selectedMarkerId, onMarkerClick, useClusterer]);
 
-  const keySet = Boolean(process.env.NEXT_PUBLIC_KAKAO_MAP_KEY);
 
   return (
     <div
@@ -164,30 +163,7 @@ export function KakaoMap({
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
           <p className="font-medium text-foreground">지도를 불러올 수 없습니다</p>
-          <p>{error}</p>
-          {!keySet && (
-            <p>frontend/.env.local 에 NEXT_PUBLIC_KAKAO_MAP_KEY 가 비어 있습니다.</p>
-          )}
-          <ul className="mt-2 list-inside list-disc space-y-1 text-left text-xs">
-            <li>앱 키 → <strong>JavaScript 키</strong> (REST 키 아님) → .env.local</li>
-            <li>
-              JavaScript 키 → <strong>JavaScript SDK 도메인</strong>에{" "}
-              {typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}
-            </li>
-            <li>
-              <strong>제품 설정 → 카카오맵 → ON</strong>
-            </li>
-            <li>
-              <a
-                href="/kakao-map-test.html"
-                className="text-primary underline"
-                target="_blank"
-                rel="noreferrer"
-              >
-                키 단독 테스트 페이지
-              </a>
-            </li>
-          </ul>
+          <p>잠시 후 다시 시도해 주세요.</p>
         </div>
       )}
     </div>

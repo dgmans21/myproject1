@@ -53,19 +53,6 @@ export function RoomHostTransferPanel({ roomId, onUpdated }: RoomHostTransferPan
     }
   };
 
-  const handleDemoAccept = async () => {
-    setSubmitting(true);
-    try {
-      await api.rooms.respondHostTransfer(roomId, true, { demo: true });
-      await reload();
-      onUpdated?.();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "데모 수락 실패");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleCancel = async () => {
     setSubmitting(true);
     try {
@@ -131,9 +118,6 @@ export function RoomHostTransferPanel({ roomId, onUpdated }: RoomHostTransferPan
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={handleCancel} disabled={submitting}>
                     요청 취소
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={handleDemoAccept} disabled={submitting}>
-                    데모: 수락 처리
                   </Button>
                 </div>
               ) : (
