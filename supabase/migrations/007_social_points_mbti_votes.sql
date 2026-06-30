@@ -23,6 +23,7 @@ ALTER TABLE profiles
 CREATE TABLE social_point_titles (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL UNIQUE,
+  name_en TEXT,
   min_points INTEGER NOT NULL UNIQUE,
   badge_color TEXT NOT NULL,
   border_style TEXT DEFAULT 'none'

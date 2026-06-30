@@ -12,14 +12,18 @@ interface RatingDisplayProps {
   className?: string;
 }
 
-function ratingColor(ratio: number): string {
+function ratingColor(value: number, max: number): string {
+  if (value >= 4.5) return "text-warm";
+  const ratio = value / max;
   if (ratio >= 0.9) return "text-warm";
   if (ratio >= 0.7) return "text-amber-500";
   if (ratio >= 0.5) return "text-primary";
   return "text-muted";
 }
 
-function barColor(ratio: number): string {
+function barColor(value: number, max: number): string {
+  if (value >= 4.5) return "bg-gradient-to-r from-amber-400 to-warm";
+  const ratio = value / max;
   if (ratio >= 0.9) return "bg-warm";
   if (ratio >= 0.7) return "bg-amber-500";
   if (ratio >= 0.5) return "bg-primary";
@@ -47,15 +51,15 @@ export function RatingDisplay({
   const iconSize = size === "sm" ? 14 : 16;
 
   return (
-    <div className={cn("inline-flex flex-col gap-1", className)}>
-      <div className="flex items-center gap-2">
+    <div className={cn("inline-flex flex-col items-center gap-1", className)}>
+      <div className="flex items-center justify-center gap-2">
         <div className="flex items-center gap-0.5" aria-hidden>
           {stars.map((state, i) => (
             <Star
               key={i}
               size={iconSize}
               className={cn(
-                state === "full" && "fill-warm text-warm",
+                state === "full" && (value >= 4.5 ? "fill-warm text-warm drop-shadow-sm" : "fill-warm text-warm"),
                 state === "half" && "fill-warm/50 text-warm",
                 state === "empty" && "text-border"
               )}
@@ -63,7 +67,14 @@ export function RatingDisplay({
           ))}
         </div>
         {showNumeric && (
-          <span className={cn("font-semibold tabular-nums", ratingColor(ratio), size === "sm" ? "text-sm" : "text-base")}>
+          <span
+            className={cn(
+              "font-semibold tabular-nums",
+              ratingColor(value, max),
+              value >= 4.5 && "font-bold",
+              size === "sm" ? "text-sm" : "text-base"
+            )}
+          >
             {value.toFixed(1)}
             <span className="text-muted font-normal"> / {max}</span>
           </span>
@@ -77,7 +88,7 @@ export function RatingDisplay({
         aria-valuemax={max}
       >
         <div
-          className={cn("h-full rounded-full transition-all duration-500 ease-out", barColor(ratio))}
+          className={cn("h-full rounded-full transition-all duration-500 ease-out", barColor(value, max))}
           style={{ width: `${ratio * 100}%` }}
         />
       </div>

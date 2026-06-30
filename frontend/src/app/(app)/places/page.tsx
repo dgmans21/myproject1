@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
+import { PlaceRatingPicker } from "@/components/PlaceRatingPicker";
 import { RatingDisplay } from "@/components/RatingDisplay";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { Button } from "@/components/ui/Button";
@@ -15,7 +16,6 @@ import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
 import { geocodeAddress } from "@/lib/kakao-map";
-import { formatPlaceRating, PLACE_RATING_OPTIONS } from "@/lib/place-ratings";
 import { isGuestSession } from "@/lib/auth-session";
 import type { WriteAction } from "@/lib/permissions";
 import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare } from "lucide-react";
@@ -258,7 +258,7 @@ export default function PlacesPage() {
                   <Badge variant="tier" tier={place.tier}>
                     {TIER_LABELS[place.tier]}
                   </Badge>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex shrink-0 flex-col items-center gap-1 text-center">
                     <RatingDisplay value={place.avg_rating} size="sm" />
                     <span className="text-xs text-muted">({place.rating_count}명)</span>
                   </div>
@@ -319,21 +319,8 @@ export default function PlacesPage() {
                 )}
 
                 {ratingPlace === place.id ? (
-                  <div className="mt-4 space-y-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {PLACE_RATING_OPTIONS.map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setRating(r)}
-                          className={`min-w-[2.25rem] rounded-lg px-2 py-1 text-sm ${
-                            rating === r ? "bg-warm/20 text-warm font-bold" : "text-muted"
-                          }`}
-                        >
-                          {formatPlaceRating(r)}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="mt-4 space-y-3">
+                    <PlaceRatingPicker value={rating} onChange={setRating} />
                     <Textarea
                       label="한줄 리뷰 (선택)"
                       value={reviewText}
