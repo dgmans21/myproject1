@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { toAuthErrorMessage } from "@/lib/auth-error-messages";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function ResetPasswordPage() {
       await new Promise((r) => setTimeout(r, 500));
       router.push("/?reset=ok");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "비밀번호 변경에 실패했습니다");
+      setError(toAuthErrorMessage(err, "reset-password"));
     } finally {
       setLoading(false);
     }

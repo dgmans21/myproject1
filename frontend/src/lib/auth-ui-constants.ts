@@ -4,8 +4,13 @@ export const AUTH_AGE_OPTIONS = [
   { value: "TWENTIES", label: "20대" },
   { value: "THIRTIES", label: "30대" },
   { value: "FORTIES", label: "40대" },
-  { value: "FIFTIES_PLUS", label: "50대 이상" },
+  { value: "FIFTIES", label: "50대" },
+  { value: "SIXTIES", label: "60대" },
+  { value: "SEVENTIES", label: "70대" },
+  { value: "EIGHTIES_PLUS", label: "80대 이상" },
 ] as const;
+
+export type AuthAgeGroup = (typeof AUTH_AGE_OPTIONS)[number]["value"];
 
 export type AuthSocialProvider = "google" | "kakao";
 // | "naver" — Supabase custom OIDC + Edge Function 필요, 보류

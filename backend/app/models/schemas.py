@@ -10,7 +10,11 @@ class AgeGroup(str, Enum):
     TWENTIES = "TWENTIES"
     THIRTIES = "THIRTIES"
     FORTIES = "FORTIES"
-    FIFTIES_PLUS = "FIFTIES_PLUS"
+    FIFTIES = "FIFTIES"
+    SIXTIES = "SIXTIES"
+    SEVENTIES = "SEVENTIES"
+    EIGHTIES_PLUS = "EIGHTIES_PLUS"
+    FIFTIES_PLUS = "FIFTIES_PLUS"  # 레거시 — 신규 가입 UI에서는 미사용
 
 
 class UserRole(str, Enum):
@@ -21,6 +25,7 @@ class UserRole(str, Enum):
 class RoomType(str, Enum):
     ONE_TIME = "ONE_TIME"
     REGULAR = "REGULAR"
+    TEAM_SCHEDULE = "TEAM_SCHEDULE"
 
 
 class RoomStatus(str, Enum):
@@ -37,10 +42,17 @@ class AppointmentStatus(str, Enum):
 
 
 class PlaceTier(str, Enum):
+    unrated = "unrated"
     bronze = "bronze"
     silver = "silver"
     gold = "gold"
-    platinum = "platinum"
+    platinum = "platinum"  # legacy DB value
+    platinum_shiny = "platinum_shiny"
+    emerald_shiny = "emerald_shiny"
+    diamond_shiny = "diamond_shiny"
+    master_blue = "master_blue"
+    grandmaster_crimson_vermilion = "grandmaster_crimson_vermilion"
+    vip_white_gold = "vip_white_gold"
 
 
 class RecommendationVoteType(str, Enum):
@@ -70,6 +82,15 @@ class ProfileBadgeTier(str, Enum):
 
 
 # --- Profile ---
+class ProfileDecorFields(BaseModel):
+    chinese_zodiac: str | None = None
+    western_zodiac: str | None = None
+    blood_type: str | None = None
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    theme_preset: str | None = None
+    interest_emojis: list[str] | None = None
+
+
 class ProfileUpdate(BaseModel):
     display_name: str | None = None
     residence: str | None = None
@@ -80,6 +101,8 @@ class ProfileUpdate(BaseModel):
     selected_title_id: int | None = None
     selected_social_title_id: int | None = None
     mbti_types: list[str] | None = Field(default=None, max_length=2)
+    status_message: str | None = Field(default=None, max_length=40)
+    profile_decor: ProfileDecorFields | None = None
 
 
 class RecommenderTitle(BaseModel):
@@ -115,6 +138,8 @@ class ProfileResponse(BaseModel):
     selected_social_title_id: int | None = None
     selected_social_title: str | None = None
     mbti_types: list[str] = []
+    profile_decor: dict = Field(default_factory=dict)
+    status_message: str | None = None
     places_adopted_count: int = 0
     available_titles: list[RecommenderTitle] = []
     available_social_titles: list[SocialPointTitle] = []
@@ -340,6 +365,25 @@ class RatingQuotaResponse(BaseModel):
 
 class PlaceRecommendationVoteCreate(BaseModel):
     vote_type: RecommendationVoteType
+
+
+class PlaceReviewItem(BaseModel):
+    user_id: UUID
+    display_name: str
+    rating: float
+    review: str
+    created_at: datetime
+    is_me: bool = False
+    is_seed_demo: bool = False
+    mbti_types: list[str] = []
+    profile_decor: dict = Field(default_factory=dict)
+
+
+class PlaceReviewsResponse(BaseModel):
+    place_id: UUID
+    place_name: str
+    reviews: list[PlaceReviewItem]
+    review_count: int
 
 
 class TravelTimeRequest(BaseModel):

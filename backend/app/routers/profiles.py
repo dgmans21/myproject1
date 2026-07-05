@@ -17,6 +17,7 @@ from app.models.schemas import (
     SecurityVerifyRequest,
     SocialPointTitle,
 )
+from app.services.profile_decor import merge_profile_decor, normalize_status_message
 from app.services.rating import get_user_rating_quota
 from app.services.social_points import calc_social_title_for_points, validate_mbti_types
 from app.services.trust import calc_badge_tier, calc_title_for_score
@@ -52,8 +53,7 @@ def _load_profile(sb, user_id: str) -> ProfileResponse:
         selected_social_title = calc_social_title_for_points(points)
 
     return ProfileResponse(
-        **data,
-        mbti_types=data.get("mbti_types") or [],
+        **{**data, "mbti_types": data.get("mbti_types") or []},
         selected_title=selected_title,
         selected_social_title=selected_social_title,
         available_titles=[t for t in available if t.min_score <= (data.get("trust_score") or 0)],
@@ -162,6 +162,33 @@ async def update_my_profile(
     if "mbti_types" in update_data and update_data["mbti_types"] is not None:
         try:
             update_data["mbti_types"] = validate_mbti_types(update_data["mbti_types"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if "status_message" in update_data:
+        update_data["status_message"] = normalize_status_message(update_data["status_message"])
+
+    if "residence" in update_data:
+        residence = (update_data["residence"] or "").strip()
+        if not residence:
+            raise HTTPException(status_code=400, detail="거주지를 입력해 주세요")
+        update_data["residence"] = residence
+
+    if "profile_decor" in update_data:
+        decor_patch = update_data.pop("profile_decor")
+        patch_dict = decor_patch if isinstance(decor_patch, dict) else decor_patch.model_dump(exclude_none=True)
+        try:
+            existing = (
+                sb.table("profiles")
+                .select("profile_decor")
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+            update_data["profile_decor"] = merge_profile_decor(
+                existing.data.get("profile_decor") if existing.data else {},
+                patch_dict,
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 

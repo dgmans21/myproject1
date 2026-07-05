@@ -8,7 +8,7 @@ MAX_TEMP_ROOM_DAYS = 365
 
 
 def is_fixed_room(room_type: RoomType) -> bool:
-    return room_type == RoomType.REGULAR
+    return room_type in (RoomType.REGULAR, RoomType.TEAM_SCHEDULE)
 
 
 def normalize_expire_at(expire_date: date) -> datetime:

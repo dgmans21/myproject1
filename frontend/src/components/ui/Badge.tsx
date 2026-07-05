@@ -1,3 +1,4 @@
+import { normalizePlaceTier } from "@/lib/place-tier";
 import { cn } from "@/lib/utils";
 
 interface BadgeProps {
@@ -8,7 +9,7 @@ interface BadgeProps {
 }
 
 export function Badge({ children, variant = "default", tier, className }: BadgeProps) {
-  const tierClass = tier ? `tier-${tier}` : "";
+  const tierClass = tier ? `tier-${normalizePlaceTier(tier)}` : "";
   const variants = {
     default: "bg-surface text-muted",
     primary: "bg-primary/10 text-primary",

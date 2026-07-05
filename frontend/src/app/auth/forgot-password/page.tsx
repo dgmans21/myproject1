@@ -8,6 +8,7 @@ import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthSocialButtons } from "@/components/auth/AuthSocialButtons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { toAuthErrorMessage } from "@/lib/auth-error-messages";
 
 function ForgotPasswordContent() {
   const searchParams = useSearchParams();
@@ -26,7 +27,7 @@ function ForgotPasswordContent() {
       await new Promise((r) => setTimeout(r, 500));
       setSent(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "요청에 실패했습니다");
+      setError(toAuthErrorMessage(err, "forgot-password"));
     } finally {
       setLoading(false);
     }

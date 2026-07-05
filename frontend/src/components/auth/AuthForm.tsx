@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/Card";
 import { AuthSocialButtons } from "@/components/auth/AuthSocialButtons";
 import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { clearGuestSession, setSessionMode } from "@/lib/auth-session";
+import { toAuthErrorMessage } from "@/lib/auth-error-messages";
+import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "signup";
 
@@ -42,18 +44,43 @@ export function AuthForm() {
     setLoading(true);
     try {
       clearGuestSession();
-      // TODO: Supabase signInWithPassword / signUp + emailRedirectTo
-      await new Promise((r) => setTimeout(r, 500));
+      const supabase = createClient();
 
       if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              display_name: displayName.trim(),
+              age_group: ageGroup,
+              residence: residence.trim(),
+            },
+          },
+        });
+        if (error) throw error;
+
+        if (data.session) {
+          router.push("/dashboard");
+          router.refresh();
+          return;
+        }
+
         const params = new URLSearchParams({ email: email.trim() });
         router.push(`/auth/verify-email?${params.toString()}`);
         return;
       }
 
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+
       router.push("/dashboard");
+      router.refresh();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "오류가 발생했습니다");
+      setError(toAuthErrorMessage(err, mode === "login" ? "login" : "signup"));
     } finally {
       setLoading(false);
     }

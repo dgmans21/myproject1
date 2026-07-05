@@ -2,13 +2,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth import get_current_user_id, get_debug_unlimited_flag
+from app.auth import get_current_user_id, get_debug_unlimited_flag, get_optional_user_id
 from app.database import get_supabase
 from app.models.schemas import (
     PlaceCreate,
     PlaceRatingCreate,
     PlaceRecommendationVoteCreate,
     PlaceResponse,
+    PlaceReviewItem,
+    PlaceReviewsResponse,
     TopRankerPlaceEndorsement,
     TravelTimeRequest,
     TravelTimeResponse,
@@ -55,6 +57,92 @@ def _get_existing_rating(sb, user_id: str, place_id: str) -> float | None:
     if not result.data:
         return None
     return float(result.data[0]["rating"])
+
+
+def _is_admin(sb, user_id: str) -> bool:
+    row = sb.table("profiles").select("role").eq("id", user_id).single().execute()
+    return bool(row.data and row.data.get("role") == "ADMIN")
+
+
+@router.get("/{place_id}/reviews", response_model=PlaceReviewsResponse)
+async def list_place_reviews(
+    place_id: UUID,
+    viewer_id: str | None = Depends(get_optional_user_id),
+):
+    """장소 한줄 리뷰 목록 (비로그인 조회 가능 · is_me는 로그인 시만)"""
+    sb = get_supabase()
+    place_key = str(place_id)
+    place = sb.table("places").select("name").eq("id", place_key).single().execute()
+    if not place.data:
+        raise HTTPException(status_code=404, detail="장소를 찾을 수 없습니다")
+
+    rows = (
+        sb.table("place_ratings")
+        .select(
+            "user_id, rating, review, created_at, is_seed_demo, "
+            "profiles(display_name, mbti_types, profile_decor)"
+        )
+        .eq("place_id", place_key)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    reviews: list[PlaceReviewItem] = []
+    for row in rows.data or []:
+        review_text = (row.get("review") or "").strip()
+        if not review_text:
+            continue
+        prof = row.get("profiles") or {}
+        reviews.append(
+            PlaceReviewItem(
+                user_id=row["user_id"],
+                display_name=prof.get("display_name") or "알 수 없음",
+                rating=float(row["rating"]),
+                review=review_text,
+                created_at=row["created_at"],
+                is_me=viewer_id is not None and str(row["user_id"]) == viewer_id,
+                is_seed_demo=bool(row.get("is_seed_demo")),
+                mbti_types=prof.get("mbti_types") or [],
+                profile_decor=prof.get("profile_decor") or {},
+            )
+        )
+
+    return PlaceReviewsResponse(
+        place_id=place_id,
+        place_name=place.data["name"],
+        reviews=reviews,
+        review_count=len(reviews),
+    )
+
+
+@router.delete("/{place_id}/reviews/{review_user_id}", status_code=204)
+async def delete_place_review(
+    place_id: UUID,
+    review_user_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+):
+    """본인 리뷰 삭제 · ADMIN은 타인(시드 포함) 삭제 가능"""
+    sb = get_supabase()
+    place_key = str(place_id)
+    target_key = str(review_user_id)
+
+    if target_key != user_id and not _is_admin(sb, user_id):
+        raise HTTPException(status_code=403, detail="삭제 권한이 없습니다")
+
+    existing = (
+        sb.table("place_ratings")
+        .select("id")
+        .eq("place_id", place_key)
+        .eq("user_id", target_key)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="리뷰를 찾을 수 없습니다")
+
+    sb.table("place_ratings").delete().eq("place_id", place_key).eq(
+        "user_id", target_key
+    ).execute()
+    recalc_place_stats(sb, place_key)
 
 
 @router.get("", response_model=list[PlaceResponse])
@@ -189,6 +277,7 @@ async def rate_place(
             "user_id": user_id,
             "rating": body.rating,
             "review": body.review,
+            "is_seed_demo": False,
         },
         on_conflict="place_id,user_id",
     ).execute()

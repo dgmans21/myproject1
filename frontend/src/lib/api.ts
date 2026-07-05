@@ -6,7 +6,6 @@ import {
   MOCK_FRIENDS,
   MOCK_HEATMAP,
   MOCK_MEMBER_BRIEFING,
-  MOCK_PLACE_REVIEWS,
   MOCK_PLACES,
   MOCK_PROFILE,
   MOCK_OTHER_PROFILES,
@@ -44,6 +43,8 @@ import {
   pickBestTopRankerEndorsement,
   type TopRankerPlaceEndorsement,
 } from "@/lib/top-ranker-endorsement";
+import { DEMO_PLACE_ID_SET } from "@/lib/demo-place-ids";
+import { applyHybridOverrides } from "@/lib/api-hybrid";
 
 const SAMPLE_ROOM_IDS = new Set(["demo-room-1", "demo-room-2", "demo-room-invite-pending", "demo-team-schedule-1"]);
 
@@ -149,9 +150,7 @@ let mockRoomMembersState: Record<string, RoomMember[]> = {
 let mockHostTransferPending: Record<string, HostTransferPending> = {};
 let mockRecommendationVotes: Record<string, "RECOMMEND" | "NOT_RECOMMEND"> = {};
 let mockPlaceReviews: Record<string, string> = {};
-let mockPlaceReviewsList: Record<string, Omit<PlaceReviewItem, "is_me">[]> = Object.fromEntries(
-  Object.entries(MOCK_PLACE_REVIEWS).map(([id, rows]) => [id, rows.map((r) => ({ ...r }))])
-) as Record<string, Omit<PlaceReviewItem, "is_me">[]>;
+let mockPlaceReviewsList: Record<string, Omit<PlaceReviewItem, "is_me">[]> = {};
 
 interface MockInviteLink {
   room_id: string;
@@ -412,7 +411,7 @@ function enrichPlace(p: Place): Place {
     my_rating: mockUserRatings[p.id],
     my_review: mockPlaceReviews[p.id],
     my_recommendation_vote: mockRecommendationVotes[p.id],
-    is_sample: p.is_sample ?? p.id.startsWith("demo-place"),
+    is_sample: p.is_sample ?? DEMO_PLACE_ID_SET.has(p.id),
     top_ranker_endorsement,
   };
 }
@@ -811,7 +810,7 @@ function assertRoomMember(roomId: string) {
   }
 }
 
-export const api = {
+const mockApi = {
   friends: {
     list: async () => {
       await delay();
@@ -1583,7 +1582,16 @@ export interface SocialPointTitle {
 export interface Profile {
   id: string;
   display_name: string;
-  age_group: "TEENS" | "TWENTIES" | "THIRTIES" | "FORTIES" | "FIFTIES_PLUS";
+  age_group:
+    | "TEENS"
+    | "TWENTIES"
+    | "THIRTIES"
+    | "FORTIES"
+    | "FIFTIES"
+    | "SIXTIES"
+    | "SEVENTIES"
+    | "EIGHTIES_PLUS"
+    | "FIFTIES_PLUS";
   residence: string;
   status_message?: string;
   home_address?: string;
@@ -1866,7 +1874,18 @@ export interface Place {
   lng: number;
   category?: string;
   kakao_place_id?: string;
-  tier: "bronze" | "silver" | "gold" | "platinum";
+  tier:
+    | "unrated"
+    | "bronze"
+    | "silver"
+    | "gold"
+    | "platinum"
+    | "platinum_shiny"
+    | "emerald_shiny"
+    | "diamond_shiny"
+    | "master_blue"
+    | "grandmaster_crimson_vermilion"
+    | "vip_white_gold";
   avg_rating: number;
   rating_count: number;
   recommender_title?: string;
@@ -1885,6 +1904,7 @@ export interface PlaceReviewItem {
   review: string;
   created_at: string;
   is_me: boolean;
+  is_seed_demo?: boolean;
   mbti_types?: string[];
   profile_decor?: ProfileDecorFields;
 }
@@ -1935,12 +1955,14 @@ export interface PlaceCreate {
   room_id?: string;
 }
 
-export const TIER_LABELS: Record<string, string> = {
-  bronze: "브론즈",
-  silver: "실버",
-  gold: "골드",
-  platinum: "플래티넘",
-};
+export type { PlaceTierId } from "./place-tier";
+export {
+  TIER_LABELS,
+  calcPlaceTierFromAvg,
+  getPlaceTierLabel,
+  getPlaceTierRingClass,
+  normalizePlaceTier,
+} from "./place-tier";
 
 export const STATUS_LABELS: Record<string, string> = {
   draft: "작성 중",
@@ -1964,3 +1986,5 @@ export const ROOM_STATUS_LABELS: Record<string, string> = {
 ["demo-room-1", "demo-room-2", "demo-team-schedule-1"].forEach((id) => {
   if (mockRooms.some((r) => r.id === id)) ensureInviteLink(id);
 });
+
+export const api = applyHybridOverrides(mockApi);

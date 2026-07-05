@@ -6,29 +6,38 @@ import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
+import { toAuthErrorMessage } from "@/lib/auth-error-messages";
 
 function CallbackContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "error">("loading");
-  const error = searchParams.get("error_description") ?? searchParams.get("error");
+  const rawError = searchParams.get("error_description") ?? searchParams.get("error");
+  let errorMessage: string | null = rawError;
+  if (rawError) {
+    try {
+      errorMessage = decodeURIComponent(rawError.replace(/\+/g, " "));
+    } catch {
+      errorMessage = rawError;
+    }
+  }
 
   useEffect(() => {
     // TODO: supabase.auth.exchangeCodeForSession (PKCE) 또는 hash fragment 처리
     const timer = setTimeout(() => {
-      if (error) {
+      if (errorMessage) {
         setStatus("error");
         return;
       }
       window.location.href = "/dashboard";
     }, 800);
     return () => clearTimeout(timer);
-  }, [error]);
+  }, [errorMessage]);
 
-  if (status === "error" || error) {
+  if (status === "error" || errorMessage) {
     return (
       <AuthShell title="로그인 실패" description="소셜 로그인 중 문제가 발생했습니다.">
         <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
-          {error ?? "알 수 없는 오류"}
+          {toAuthErrorMessage(errorMessage ? { message: errorMessage } : null, "oauth")}
         </p>
         <Link href="/" className="mt-4 block">
           <Button variant="secondary" className="w-full">

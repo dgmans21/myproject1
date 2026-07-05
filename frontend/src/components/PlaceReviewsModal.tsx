@@ -141,6 +141,11 @@ export function PlaceReviewsModal({
                         <span className="text-[10px] font-normal text-muted">(나)</span>
                       )}
                     </span>
+                  {r.is_seed_demo && (
+                    <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] text-muted">
+                      예시
+                    </span>
+                  )}
                     <RatingDisplay value={r.rating} size="sm" showNumeric={false} />
                     {r.mbti_types?.map((t) => (
                       <MbtiBadge key={t} type={t} />

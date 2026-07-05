@@ -3,21 +3,27 @@ from datetime import datetime
 MAX_FIVE_STAR_TOTAL = 5
 MAX_FOUR_HALF_STAR_PER_MONTH = 5
 
-TIER_THRESHOLDS = {
-    "bronze": (0, 3.5),
-    "silver": (3.5, 4.0),
-    "gold": (4.0, 4.5),
-    "platinum": (4.5, 5.1),
-}
+# avg_rating 하한(포함) → tier (프론트 place-tier.ts PLACE_TIER_MIN_AVG와 동일)
+PLACE_TIER_BANDS: list[tuple[float, str]] = [
+    (4.5, "vip_white_gold"),
+    (4.25, "grandmaster_crimson_vermilion"),
+    (4.0, "master_blue"),
+    (3.75, "diamond_shiny"),
+    (3.5, "emerald_shiny"),
+    (3.0, "platinum_shiny"),
+    (2.5, "gold"),
+    (2.0, "silver"),
+    (1.0, "bronze"),
+]
 
 
 def calc_tier(avg_rating: float, rating_count: int) -> str:
-    if rating_count < 3:
-        return "bronze"
-    for tier, (low, high) in TIER_THRESHOLDS.items():
-        if low <= avg_rating < high:
+    if rating_count <= 0 or avg_rating < 1.0:
+        return "unrated"
+    for min_avg, tier in PLACE_TIER_BANDS:
+        if avg_rating >= min_avg:
             return tier
-    return "bronze"
+    return "unrated"
 
 
 def current_month_year() -> str:

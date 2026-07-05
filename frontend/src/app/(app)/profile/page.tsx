@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Input";
+import { Input, Textarea } from "@/components/ui/Input";
 import { TrustBadge } from "@/components/ProfileBadgeBorder";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
@@ -12,6 +12,7 @@ import { ProfileSummaryCard } from "@/components/ProfileSummaryCard";
 import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
 import { ProfileInterestsPanel } from "@/components/ProfileInterestsPanel";
 import { api, Profile, RecommenderTitle, SocialPointTitle, toPublicProfileView } from "@/lib/api";
+import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { MBTI_OPTIONS } from "@/lib/mbti";
 import { PROFILE_STATUS_MAX_LENGTH } from "@/lib/profile-status";
 
@@ -22,12 +23,16 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [mbtiDraft, setMbtiDraft] = useState<string[]>([]);
   const [statusDraft, setStatusDraft] = useState("");
+  const [ageGroupDraft, setAgeGroupDraft] = useState<Profile["age_group"]>("TWENTIES");
+  const [residenceDraft, setResidenceDraft] = useState("");
 
   useEffect(() => {
     api.profiles.me().then((p) => {
       setProfile(p);
       setMbtiDraft(p.mbti_types ?? []);
       setStatusDraft(p.status_message ?? "");
+      setAgeGroupDraft(p.age_group);
+      setResidenceDraft(p.residence);
     }).catch(() => {});
     api.profiles.attendanceHeatmap().then(setHeatmap).catch(() => {});
   }, []);
@@ -86,6 +91,28 @@ export default function ProfilePage() {
     }
   };
 
+  const saveBasicInfo = async () => {
+    const residence = residenceDraft.trim();
+    if (!residence) {
+      alert("거주지를 입력해 주세요");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await api.profiles.update({
+        age_group: ageGroupDraft,
+        residence,
+      });
+      setProfile(updated);
+      setAgeGroupDraft(updated.age_group);
+      setResidenceDraft(updated.residence);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "프로필 저장 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!profile) {
     return (
       <div className="min-h-screen bg-background">
@@ -100,6 +127,9 @@ export default function ProfilePage() {
     mbtiDraft.some((t, i) => profile.mbti_types[i] !== t);
 
   const statusChanged = statusDraft !== (profile.status_message ?? "");
+
+  const basicInfoChanged =
+    ageGroupDraft !== profile.age_group || residenceDraft.trim() !== profile.residence;
 
   return (
     <div className="min-h-screen bg-background">
@@ -132,6 +162,44 @@ export default function ProfilePage() {
 
         {tab === "info" && (
           <>
+            <Card className="mt-6">
+              <CardTitle className="text-base">나이대 · 거주지</CardTitle>
+              <CardDescription className="mt-1">
+                프로필 상단과 방 멤버 목록에 표시됩니다. 회원가입 후에도 수정할 수 있습니다.
+              </CardDescription>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ageGroup" className="mb-1.5 block text-sm font-medium text-foreground">
+                    나이대
+                  </label>
+                  <select
+                    id="ageGroup"
+                    value={ageGroupDraft}
+                    onChange={(e) => setAgeGroupDraft(e.target.value as Profile["age_group"])}
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm"
+                  >
+                    {AUTH_AGE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  label="거주지 (시/구)"
+                  id="residence"
+                  value={residenceDraft}
+                  onChange={(e) => setResidenceDraft(e.target.value)}
+                  placeholder="서울 강남구"
+                  autoComplete="address-level2"
+                />
+              </div>
+              {basicInfoChanged && (
+                <Button className="mt-4" size="sm" disabled={saving} onClick={saveBasicInfo}>
+                  나이대·거주지 저장
+                </Button>
+              )}
+            </Card>
             <Card className="mt-6">
               <CardTitle className="text-base">한 줄 소개 · 상태</CardTitle>
               <CardDescription className="mt-1">
