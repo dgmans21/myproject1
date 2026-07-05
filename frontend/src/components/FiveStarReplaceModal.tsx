@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FiveStarPlaceItem } from "@/lib/api";
+import { PREMIUM_RATING_META } from "@/lib/place-ratings";
 import { AlertTriangle } from "lucide-react";
 
 interface FiveStarReplaceModalProps {
@@ -39,12 +40,12 @@ export function FiveStarReplaceModal({
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warm" />
           <div>
             <h2 id="replace-modal-title" className="text-lg font-semibold text-foreground">
-              5점을 바꿀까요?
+              {PREMIUM_RATING_META[5].label}을 바꿀까요?
             </h2>
             <p className="mt-2 text-sm text-muted">
-              5점은 최대 5곳까지만 줄 수 있어요.{" "}
-              <strong className="text-foreground">{targetPlaceName}</strong>에 5점을 주려면, 아래
-              중 하나의 5점을 취소(4점으로 변경)해야 합니다.
+              {PREMIUM_RATING_META[5].label}은 최대 5곳까지만 줄 수 있어요.{" "}
+              <strong className="text-foreground">{targetPlaceName}</strong>에{" "}
+              {PREMIUM_RATING_META[5].label}을 주려면, 아래 중 하나를 4점으로 낮춰야 합니다.
             </p>
           </div>
         </div>
@@ -72,7 +73,7 @@ export function FiveStarReplaceModal({
             취소
           </Button>
           <Button disabled={!selected} onClick={() => selected && onConfirm(selected)}>
-            5점 교체하기
+            {PREMIUM_RATING_META[5].label} 교체하기
           </Button>
         </div>
       </div>

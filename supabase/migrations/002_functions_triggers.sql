@@ -111,6 +111,17 @@ BEGIN
     END IF;
   END IF;
 
+  -- 4.5 이탈(내리기·5점 승격·삭제는 별도 트리거): 부여 달 quota 환불
+  IF TG_OP = 'UPDATE' AND OLD.rating = 4.5 AND NEW.rating IS DISTINCT FROM 4.5 THEN
+    IF OLD.four_half_granted_month IS NOT NULL THEN
+      UPDATE user_rating_quota
+      SET four_half_star_used = GREATEST(0, four_half_star_used - 1)
+      WHERE user_id = OLD.user_id AND month_year = OLD.four_half_granted_month;
+    END IF;
+    NEW.four_half_granted_month := NULL;
+  END IF;
+
+  -- 4.5 진입: 월 한도 차감 + 어느 달에 썼는지 기록
   IF NEW.rating = 4.5 AND (TG_OP = 'INSERT' OR OLD.rating IS DISTINCT FROM 4.5) THEN
     month_key := TO_CHAR(NOW(), 'YYYY-MM');
     SELECT COALESCE(four_half_star_used, 0) INTO half_used
@@ -122,9 +133,22 @@ BEGIN
     VALUES (NEW.user_id, month_key, 1)
     ON CONFLICT (user_id, month_year)
     DO UPDATE SET four_half_star_used = user_rating_quota.four_half_star_used + 1;
+    NEW.four_half_granted_month := month_key;
   END IF;
 
   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION refund_four_half_on_rating_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.rating = 4.5 AND OLD.four_half_granted_month IS NOT NULL THEN
+    UPDATE user_rating_quota
+    SET four_half_star_used = GREATEST(0, four_half_star_used - 1)
+    WHERE user_id = OLD.user_id AND month_year = OLD.four_half_granted_month;
+  END IF;
+  RETURN OLD;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -164,14 +188,25 @@ RETURNS void AS $$ BEGIN PERFORM delete_inactive_fixed_rooms(); END; $$ LANGUAGE
 
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
-DECLARE default_title_id INTEGER;
+DECLARE
+  default_title_id INTEGER;
+  age_val age_group := 'TWENTIES';
+  raw_age TEXT;
 BEGIN
   SELECT id INTO default_title_id FROM recommender_titles WHERE min_score = 0 LIMIT 1;
+  raw_age := NEW.raw_user_meta_data->>'age_group';
+  IF raw_age IS NOT NULL AND btrim(raw_age) <> '' THEN
+    BEGIN
+      age_val := raw_age::age_group;
+    EXCEPTION WHEN invalid_text_representation THEN
+      age_val := 'TWENTIES';
+    END;
+  END IF;
   INSERT INTO profiles (id, display_name, age_group, residence, selected_title_id)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1)),
-    COALESCE((NEW.raw_user_meta_data->>'age_group')::age_group, 'TWENTIES'),
+    age_val,
     COALESCE(NEW.raw_user_meta_data->>'residence', '미입력'),
     default_title_id
   );
@@ -211,7 +246,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE VIEW profiles_public AS
+CREATE OR REPLACE VIEW profiles_public
+WITH (security_invoker = false)
+AS
 SELECT
   id, display_name, age_group, residence, trust_score, badge_tier,
   selected_title_id, selected_social_title_id, social_points, mbti_types,
@@ -219,7 +256,7 @@ SELECT
 FROM profiles;
 
 COMMENT ON VIEW profiles_public IS
-  '랭킹·멤버 목록용. security_pin_hash·home_address·home_lat/lng 제외';
+  '랭킹·멤버 목록용. home_address·home_lat/lng 제외. security_invoker=false로 타인 조회 허용';
 
 -- Triggers
 CREATE TRIGGER on_auth_user_created
@@ -233,6 +270,10 @@ CREATE TRIGGER appointments_updated_at BEFORE UPDATE ON appointments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER places_updated_at BEFORE UPDATE ON places
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER team_schedule_day_memos_updated_at BEFORE UPDATE ON team_schedule_day_memos
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER team_schedule_week_notes_updated_at BEFORE UPDATE ON team_schedule_week_notes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 CREATE TRIGGER place_recommendation_vote_trust
   AFTER INSERT OR UPDATE OF vote_type OR DELETE ON place_recommendation_votes
@@ -245,6 +286,10 @@ CREATE TRIGGER appointments_touch_room
 CREATE TRIGGER place_ratings_quota
   BEFORE INSERT OR UPDATE OF rating ON place_ratings
   FOR EACH ROW EXECUTE FUNCTION enforce_place_rating_quota();
+
+CREATE TRIGGER place_ratings_refund_four_half_on_delete
+  BEFORE DELETE ON place_ratings
+  FOR EACH ROW EXECUTE FUNCTION refund_four_half_on_rating_delete();
 
 CREATE TRIGGER room_votes_apply_points
   AFTER INSERT ON room_votes

@@ -67,7 +67,6 @@ CREATE TABLE profiles (
   mbti_types TEXT[] NOT NULL DEFAULT '{}',
   profile_decor JSONB NOT NULL DEFAULT '{}'::jsonb,
   role user_role DEFAULT 'USER',
-  security_pin_hash TEXT,
   places_adopted_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -94,6 +93,14 @@ CREATE TABLE profiles (
 
 COMMENT ON COLUMN profiles.profile_decor IS
   '꾸미기 JSON: chinese_zodiac, western_zodiac, blood_type, accent_color, theme_preset, interest_emojis';
+
+-- PIN 해시 — service role 전용 (RLS 정책 없음)
+CREATE TABLE profile_secrets (
+  user_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  security_pin_hash TEXT
+);
+
+COMMENT ON TABLE profile_secrets IS '보안 PIN. 클라이언트 직접 접근 금지 — 백엔드 service role만';
 
 -- ============================================================
 -- Rooms
@@ -336,9 +343,13 @@ CREATE TABLE place_ratings (
     AND (rating * 2) = FLOOR(rating * 2)
   ),
   review TEXT,
+  four_half_granted_month TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(place_id, user_id)
 );
+
+COMMENT ON COLUMN place_ratings.four_half_granted_month IS
+  '4.5점 부여 시 차감된 month_year(YYYY-MM). 4.5→다른점수 시 해당 월 quota 환불에 사용';
 
 CREATE TABLE user_rating_quota (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -408,6 +419,7 @@ CREATE INDEX idx_rooms_one_time_activity ON rooms(room_type, room_status, last_a
 CREATE INDEX idx_rooms_expire_at ON rooms (expire_at) WHERE expire_at IS NOT NULL;
 CREATE INDEX idx_rooms_last_activity_fixed ON rooms (last_activity_at) WHERE is_fixed = true;
 CREATE INDEX idx_room_invite_links_token ON room_invite_links (token);
+CREATE INDEX idx_room_members_user ON room_members(user_id);
 CREATE INDEX idx_team_schedule_day_memos_room_month ON team_schedule_day_memos (room_id, schedule_date);
 CREATE INDEX idx_friendships_user ON friendships (user_id);
 CREATE INDEX idx_appointment_comments_apt ON appointment_comments (appointment_id, created_at);

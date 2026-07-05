@@ -205,12 +205,18 @@ async def verify_security(
     import hashlib
 
     sb = get_supabase()
-    profile = sb.table("profiles").select("security_pin_hash").eq("id", user_id).single().execute()
-    if not profile.data or not profile.data.get("security_pin_hash"):
+    secret = (
+        sb.table("profile_secrets")
+        .select("security_pin_hash")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not secret.data or not secret.data.get("security_pin_hash"):
         raise HTTPException(status_code=400, detail="보안 PIN이 설정되지 않았습니다")
 
     submitted = hashlib.sha256(body.pin_or_password.encode()).hexdigest()
-    if submitted != profile.data["security_pin_hash"]:
+    if submitted != secret.data["security_pin_hash"]:
         raise HTTPException(status_code=403, detail="인증에 실패했습니다")
     return {"verified": True}
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
+import { FourHalfStarConfirmModal } from "@/components/FourHalfStarConfirmModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { PlaceRatingPicker } from "@/components/PlaceRatingPicker";
 import { RatingDisplay } from "@/components/RatingDisplay";
@@ -15,6 +16,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
+import { PREMIUM_RATING_META } from "@/lib/place-ratings";
 import { geocodeAddress } from "@/lib/kakao-map";
 import { isGuestSession } from "@/lib/auth-session";
 import type { WriteAction } from "@/lib/permissions";
@@ -33,6 +35,10 @@ export default function PlacesPage() {
   const [rating, setRating] = useState(4);
   const [reviewText, setReviewText] = useState("");
   const [replaceModal, setReplaceModal] = useState<{
+    placeId: string;
+    placeName: string;
+  } | null>(null);
+  const [fourHalfConfirm, setFourHalfConfirm] = useState<{
     placeId: string;
     placeName: string;
   } | null>(null);
@@ -141,6 +147,11 @@ export default function PlacesPage() {
       }
     }
 
+    if (rating === 4.5 && place.my_rating !== 4.5) {
+      setFourHalfConfirm({ placeId, placeName: place.name });
+      return;
+    }
+
     await submitRating(placeId);
   };
 
@@ -226,12 +237,15 @@ export default function PlacesPage() {
           <Award className="h-5 w-5 text-warm shrink-0" />
           <div className="space-y-1">
             <p>
-              <strong className="text-foreground">5점</strong>은 평생 최대 5곳 · 다 쓰면 기존 5점
-              하나를 취소하고 새로 줄 수 있어요
+              <strong className="text-foreground">{PREMIUM_RATING_META[5].label}</strong>(5점)은
+              평생 최대 5곳 · 더 낮은 별점으로 바꾸거나, 꽉 찼을 때 다른{" "}
+              {PREMIUM_RATING_META[5].label}과 교체할 수 있어요
             </p>
             <p>
-              <strong className="text-foreground">4.5점</strong>은 이번 달{" "}
-              {quota ? `${quota.four_half.used}/${quota.four_half.max}회` : "5회"} (별점 한도)
+              <strong className="text-foreground">{PREMIUM_RATING_META[4.5].label}</strong>
+              (4.5점)은 이번 달{" "}
+              {quota ? `${quota.four_half.used}/${quota.four_half.max}회` : "5회"} ·{" "}
+              <span className="text-warm">4.5에서 벗어나면 횟수 환불</span>
             </p>
             <p>
               <strong className="text-foreground">추천/비추천</strong>은 별점과 별개 · 장소
@@ -239,7 +253,8 @@ export default function PlacesPage() {
             </p>
             {quota && (
               <p className="text-xs">
-                내 5점 사용: {quota.five_star.used}/{quota.five_star.max}곳
+                내 {PREMIUM_RATING_META[5].label} 사용: {quota.five_star.used}/{quota.five_star.max}
+                곳
               </p>
             )}
           </div>
@@ -320,7 +335,12 @@ export default function PlacesPage() {
 
                 {ratingPlace === place.id ? (
                   <div className="mt-4 space-y-3">
-                    <PlaceRatingPicker value={rating} onChange={setRating} />
+                    <PlaceRatingPicker
+                      value={rating}
+                      onChange={setRating}
+                      fourHalfUsed={quota?.four_half.used}
+                      fourHalfMax={quota?.four_half.max}
+                    />
                     <Textarea
                       label="한줄 리뷰 (선택)"
                       value={reviewText}
@@ -340,6 +360,21 @@ export default function PlacesPage() {
           )}
         </div>
       </main>
+
+      <FourHalfStarConfirmModal
+        open={Boolean(fourHalfConfirm)}
+        placeName={fourHalfConfirm?.placeName ?? ""}
+        used={quota?.four_half.used ?? 0}
+        max={quota?.four_half.max ?? 5}
+        onCancel={() => setFourHalfConfirm(null)}
+        onConfirm={() => {
+          if (fourHalfConfirm) {
+            const { placeId } = fourHalfConfirm;
+            setFourHalfConfirm(null);
+            void submitRating(placeId);
+          }
+        }}
+      />
 
       <FiveStarReplaceModal
         open={Boolean(replaceModal)}

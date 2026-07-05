@@ -57,6 +57,8 @@ let mockProfile = { ...MOCK_PROFILE } as Profile;
 let mockUserRatings: Record<string, number> = {};
 let mockFourHalfUsed = 0;
 let mockFourHalfMonth = currentMonthYear();
+/** place_id → 4.5 부여 시 차감된 YYYY-MM (DB four_half_granted_month와 동일) */
+let mockFourHalfGrantedMonth: Record<string, string> = {};
 /** praise votes: key `${roomId}:${aptId}:${voterId}` -> targetUserId */
 let mockPraiseVotes: Record<string, Record<string, string>> = {};
 let mockTravelRewards: Record<string, string> = {};
@@ -422,6 +424,26 @@ function syncFourHalfMonth() {
   }
 }
 
+function refundMockFourHalfQuota(placeId: string) {
+  const grantedMonth = mockFourHalfGrantedMonth[placeId];
+  if (!grantedMonth) return;
+  if (grantedMonth === mockFourHalfMonth) {
+    mockFourHalfUsed = Math.max(0, mockFourHalfUsed - 1);
+  }
+  delete mockFourHalfGrantedMonth[placeId];
+}
+
+function chargeMockFourHalfQuota(placeId: string) {
+  syncFourHalfMonth();
+  if (mockFourHalfUsed >= MAX_FOUR_HALF_PER_MONTH) {
+    throw new Error(
+      `이번 달 4.5점 평가 한도(${MAX_FOUR_HALF_PER_MONTH}회)를 초과했습니다`
+    );
+  }
+  mockFourHalfUsed += 1;
+  mockFourHalfGrantedMonth[placeId] = mockFourHalfMonth;
+}
+
 function recalcPlaceAvg(placeId: string, rating: number, isNew: boolean) {
   mockPlaces = mockPlaces.map((p) => {
     if (p.id !== placeId) return p;
@@ -481,13 +503,12 @@ function applyMockRating(
     }
   }
 
+  if (oldRating === 4.5 && rating !== 4.5) {
+    refundMockFourHalfQuota(placeId);
+  }
+
   if (rating === 4.5 && oldRating !== 4.5) {
-    if (mockFourHalfUsed >= MAX_FOUR_HALF_PER_MONTH) {
-      throw new Error(
-        `이번 달 4.5점 평가 한도(${MAX_FOUR_HALF_PER_MONTH}회)를 초과했습니다`
-      );
-    }
-    mockFourHalfUsed += 1;
+    chargeMockFourHalfQuota(placeId);
   }
 
   mockUserRatings[placeId] = rating;

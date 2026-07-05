@@ -2,6 +2,7 @@
 -- 002_functions_triggers.sql 적용 후 실행
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profile_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommender_titles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE social_point_titles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
@@ -27,13 +28,17 @@ ALTER TABLE places ENABLE ROW LEVEL SECURITY;
 ALTER TABLE place_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE place_recommendation_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_travel_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_rating_quota ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_votes ENABLE ROW LEVEL SECURITY;
 
--- profiles
-CREATE POLICY "Profiles selectable by authenticated" ON profiles FOR SELECT TO authenticated USING (true);
+-- profiles (base table: 본인만 전체 컬럼 · 타인은 profiles_public 뷰)
+CREATE POLICY "Users can view own full profile" ON profiles FOR SELECT TO authenticated
+  USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE TO authenticated
   USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- profile_secrets: RLS ON, 정책 없음 → authenticated 차단, service role만
 
 CREATE POLICY "Recommender titles are public" ON recommender_titles FOR SELECT USING (true);
 CREATE POLICY "Social titles are public" ON social_point_titles FOR SELECT USING (true);
@@ -50,11 +55,24 @@ CREATE POLICY "Room owners can update rooms" ON rooms FOR UPDATE
 
 -- room_members
 CREATE POLICY "Members can view room membership" ON room_members FOR SELECT
-  USING (EXISTS (
-    SELECT 1 FROM room_members rm WHERE rm.room_id = room_members.room_id AND rm.user_id = auth.uid()
-  ));
+  USING (
+    user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM room_members rm WHERE rm.room_id = room_members.room_id AND rm.user_id = auth.uid()
+    )
+  );
 CREATE POLICY "Members can join rooms" ON room_members FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id
+    AND (
+      role = 'MEMBER'
+      OR (
+        role = 'OWNER'
+        AND EXISTS (SELECT 1 FROM rooms r WHERE r.id = room_id AND r.created_by = auth.uid())
+        AND NOT EXISTS (SELECT 1 FROM room_members rm WHERE rm.room_id = room_members.room_id)
+      )
+    )
+  );
 CREATE POLICY "Owners can update member roles" ON room_members FOR UPDATE TO authenticated
   USING (EXISTS (
     SELECT 1 FROM room_members rm WHERE rm.room_id = room_members.room_id AND rm.user_id = auth.uid() AND rm.role = 'OWNER'
@@ -186,6 +204,28 @@ CREATE POLICY "Members view departure status" ON appointment_member_departure FO
 CREATE POLICY "Members update own departure status" ON appointment_member_departure FOR ALL
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
+CREATE POLICY "Room members view settlements" ON appointment_settlements FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM appointments a JOIN room_members rm ON rm.room_id = a.room_id
+    WHERE a.id = appointment_settlements.appointment_id AND rm.user_id = auth.uid()
+  ));
+
+CREATE POLICY "Room members view appointment places" ON appointment_places FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM appointments a JOIN room_members rm ON rm.room_id = a.room_id
+    WHERE a.id = appointment_places.appointment_id AND rm.user_id = auth.uid()
+  ));
+CREATE POLICY "Room members manage appointment places" ON appointment_places FOR INSERT TO authenticated
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM appointments a JOIN room_members rm ON rm.room_id = a.room_id
+    WHERE a.id = appointment_places.appointment_id AND rm.user_id = auth.uid()
+  ));
+CREATE POLICY "Room members update appointment places" ON appointment_places FOR UPDATE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM appointments a JOIN room_members rm ON rm.room_id = a.room_id
+    WHERE a.id = appointment_places.appointment_id AND rm.user_id = auth.uid()
+  ));
+
 -- places
 CREATE POLICY "Authenticated users view places" ON places FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Authenticated users create places" ON places FOR INSERT TO authenticated
@@ -202,17 +242,31 @@ CREATE POLICY "Anyone view recommendation votes" ON place_recommendation_votes F
 CREATE POLICY "Users manage own travel logs" ON user_travel_logs FOR ALL TO authenticated
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
+CREATE POLICY "Users view own rating quota" ON user_rating_quota FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+
 -- room_votes
 CREATE POLICY "Members can view own room votes" ON room_votes FOR SELECT
   USING (voter_id = auth.uid() OR target_user_id = auth.uid() OR EXISTS (
     SELECT 1 FROM room_members WHERE room_id = room_votes.room_id AND user_id = auth.uid()
   ));
 CREATE POLICY "Members can insert praise votes" ON room_votes FOR INSERT
-  WITH CHECK (voter_id = auth.uid() AND EXISTS (
-    SELECT 1 FROM room_members WHERE room_id = room_votes.room_id AND user_id = auth.uid()
-  ) AND EXISTS (
-    SELECT 1 FROM room_members WHERE room_id = room_votes.room_id AND user_id = room_votes.target_user_id
-  ));
+  WITH CHECK (
+    voter_id = auth.uid()
+    AND EXISTS (
+      SELECT 1 FROM room_members WHERE room_id = room_votes.room_id AND user_id = auth.uid()
+    )
+    AND EXISTS (
+      SELECT 1 FROM room_members WHERE room_id = room_votes.room_id AND user_id = room_votes.target_user_id
+    )
+    AND (
+      vote_kind <> 'TRAVEL_REWARD'
+      OR EXISTS (
+        SELECT 1 FROM room_members
+        WHERE room_id = room_votes.room_id AND user_id = auth.uid() AND role = 'OWNER'
+      )
+    )
+  );
 
 -- ============================================================
 -- pg_cron (Extensions → pg_cron ON 후 Dashboard에서 실행)
