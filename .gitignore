@@ -61,4 +61,4 @@ next-env.d.ts
 DEVELOPERS.local.md
 supabase/migrations/README.md
 supabase/SUPABASE_CONTEXT.md
-README.md
+supabase/supabase_review_tasks.md
