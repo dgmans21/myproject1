@@ -71,7 +71,8 @@ export function PlaceReviewsModal({
 
   const handleDelete = async (review: PlaceReviewItem) => {
     if (!placeId || !profile) return;
-    if (!confirm("이 리뷰를 삭제하시겠습니까?")) return;
+    const isFiveStar = review.rating === 5;
+    if (!isFiveStar && !confirm("이 리뷰를 삭제하시겠습니까?")) return;
     try {
       await api.places.deleteReview(placeId, review.user_id);
       reload();

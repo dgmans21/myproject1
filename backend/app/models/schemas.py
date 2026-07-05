@@ -289,6 +289,12 @@ class PlaceCreate(BaseModel):
     room_id: UUID | None = None
 
 
+class TopRankerPlaceEndorsement(BaseModel):
+    rank: int
+    user_id: UUID
+    display_name: str
+
+
 class PlaceResponse(BaseModel):
     id: UUID
     name: str
@@ -301,6 +307,7 @@ class PlaceResponse(BaseModel):
     rating_count: int
     recommender_title: str | None = None
     past_travel_hint: str | None = None
+    top_ranker_endorsement: TopRankerPlaceEndorsement | None = None
 
 
 class PlaceRatingCreate(BaseModel):

@@ -7,7 +7,7 @@ import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { FourHalfStarConfirmModal } from "@/components/FourHalfStarConfirmModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { PlaceRatingPicker } from "@/components/PlaceRatingPicker";
-import { RatingDisplay } from "@/components/RatingDisplay";
+import { TopRankerEndorsementBadge } from "@/components/TopRankerEndorsementBadge";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
@@ -238,8 +238,7 @@ export default function PlacesPage() {
           <div className="space-y-1">
             <p>
               <strong className="text-foreground">{PREMIUM_RATING_META[5].label}</strong>(5점)은
-              평생 최대 5곳 · 더 낮은 별점으로 바꾸거나, 꽉 찼을 때 다른{" "}
-              {PREMIUM_RATING_META[5].label}과 교체할 수 있어요
+              평생 최대 5곳 · 꽉 차면 다른 인생맛집과 교체할 수 있어요
             </p>
             <p>
               <strong className="text-foreground">{PREMIUM_RATING_META[4.5].label}</strong>
@@ -297,8 +296,11 @@ export default function PlacesPage() {
                 )}
                 {place.recommender_title && (
                   <p className="mt-2 text-xs text-primary">
-                    추천: {place.recommender_title}
+                    등록: {place.recommender_title}
                   </p>
+                )}
+                {place.top_ranker_endorsement && (
+                  <TopRankerEndorsementBadge endorsement={place.top_ranker_endorsement} />
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">

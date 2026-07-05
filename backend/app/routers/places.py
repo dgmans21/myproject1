@@ -9,6 +9,7 @@ from app.models.schemas import (
     PlaceRatingCreate,
     PlaceRecommendationVoteCreate,
     PlaceResponse,
+    TopRankerPlaceEndorsement,
     TravelTimeRequest,
     TravelTimeResponse,
 )
@@ -22,6 +23,7 @@ from app.services.rating import (
     is_four_half_star_rating,
     recalc_place_stats,
 )
+from app.services.top_ranker import get_top_ranker_endorsements_for_places
 
 router = APIRouter(prefix="/places", tags=["places"])
 
@@ -66,6 +68,9 @@ async def list_places(
         query = query.eq("room_id", str(room_id))
     result = query.order("avg_rating", desc=True).limit(50).execute()
 
+    place_ids = [p["id"] for p in result.data]
+    endorsements = get_top_ranker_endorsements_for_places(sb, place_ids)
+
     items = []
     for p in result.data:
         title = None
@@ -81,6 +86,11 @@ async def list_places(
             if t.data:
                 title = t.data["title"]
 
+        endorsement_raw = endorsements.get(p["id"])
+        endorsement = (
+            TopRankerPlaceEndorsement(**endorsement_raw) if endorsement_raw else None
+        )
+
         items.append(
             PlaceResponse(
                 id=p["id"],
@@ -94,6 +104,7 @@ async def list_places(
                 rating_count=p["rating_count"],
                 recommender_title=title,
                 past_travel_hint=_past_travel_hint(sb, user_id, p["id"]),
+                top_ranker_endorsement=endorsement,
             )
         )
     return items

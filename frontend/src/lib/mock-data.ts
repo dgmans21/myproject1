@@ -235,8 +235,8 @@ export const MOCK_PLACE_REVIEWS: Record<
     {
       user_id: "demo-rank-2",
       display_name: "미식탐험가",
-      rating: 4,
-      review: "점심보다 저녁이 더 맛있음. 강남역에서 걸어 5분",
+      rating: 5,
+      review: "점심보다 저녁이 더 맛있음. 인생맛집으로 등록!",
       created_at: "2026-06-05T18:30:00Z",
     },
     {

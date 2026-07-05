@@ -36,7 +36,11 @@ import {
 import { normalizeInterestEmojis } from "./profile-interests";
 import { isValidRoomAccent } from "./room-accent";
 import { isValidMeetingPurpose, type MeetingPurposeId } from "./meeting-purpose";
-import { defaultInviteExpiry, generateInviteToken } from "./invite-token";
+import {
+  buildTrustRankIndex,
+  pickBestTopRankerEndorsement,
+  type TopRankerPlaceEndorsement,
+} from "@/lib/top-ranker-endorsement";
 
 const SAMPLE_ROOM_IDS = new Set(["demo-room-1", "demo-room-2", "demo-room-invite-pending", "demo-team-schedule-1"]);
 
@@ -323,13 +327,29 @@ function assignOwnerIfMissing(roomId: string, userId: string) {
   );
 }
 
+function getPlaceRatingsForEndorsement(
+  placeId: string
+): Array<{ user_id: string; rating: number }> {
+  return (mockPlaceReviewsList[placeId] ?? []).map((r) => ({
+    user_id: r.user_id,
+    rating: r.rating,
+  }));
+}
+
 function enrichPlace(p: Place): Place {
+  const rankIndex = buildTrustRankIndex();
+  const top_ranker_endorsement = pickBestTopRankerEndorsement(
+    getPlaceRatingsForEndorsement(p.id),
+    rankIndex
+  );
+
   return {
     ...p,
     my_rating: mockUserRatings[p.id],
     my_review: mockPlaceReviews[p.id],
     my_recommendation_vote: mockRecommendationVotes[p.id],
     is_sample: p.is_sample ?? p.id.startsWith("demo-place"),
+    top_ranker_endorsement,
   };
 }
 
@@ -1746,6 +1766,7 @@ export interface Place {
   my_review?: string;
   my_recommendation_vote?: "RECOMMEND" | "NOT_RECOMMEND" | null;
   is_sample?: boolean;
+  top_ranker_endorsement?: TopRankerPlaceEndorsement;
 }
 
 export interface PlaceReviewItem {
