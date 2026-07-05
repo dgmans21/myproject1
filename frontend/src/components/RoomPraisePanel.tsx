@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { ProfileDecorBadges, MEMBER_DECOR_DISPLAY_LIMIT } from "@/components/ProfileDecorBadges";
+import { ProfileNameButton } from "@/components/ProfileNameButton";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
 import { api, PraiseSticker, PraiseVoteStatus, RoomMember } from "@/lib/api";
 import { PRAISE_STICKER_LABELS } from "@/lib/social-points";
@@ -137,7 +138,7 @@ export function RoomPraisePanel({ roomId, appointmentId, isOwner }: RoomPraisePa
           {members.filter((m) => !m.is_me).map((m) => (
             <li key={m.user_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
-                {m.display_name}
+                <ProfileNameButton userId={m.user_id} displayName={m.display_name} />
                 <ProfileDecorBadges
                   decor={m.profile_decor}
                   maxItems={MEMBER_DECOR_DISPLAY_LIMIT}

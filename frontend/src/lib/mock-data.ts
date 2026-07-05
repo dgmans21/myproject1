@@ -65,6 +65,7 @@ export const MOCK_ROOM_MEMBERS = [
       western_zodiac: "GEMINI",
       blood_type: "A",
     },
+    status_message: "강남 맛집 탐방 중 · 주말엔 등산",
     is_me: true,
   },
   {
@@ -80,6 +81,7 @@ export const MOCK_ROOM_MEMBERS = [
       western_zodiac: "CAPRICORN",
       blood_type: "B",
     },
+    status_message: "주말엔 맛집, 평일엔 조용히",
     is_me: false,
   },
   {
@@ -95,6 +97,7 @@ export const MOCK_ROOM_MEMBERS = [
       western_zodiac: "PISCES",
       blood_type: "O",
     },
+    status_message: "등산·보드게임 좋아해요",
     is_me: false,
   },
 ];
@@ -380,6 +383,7 @@ export const MOCK_PROFILE = {
   display_name: "데모 사용자",
   age_group: "TWENTIES" as const,
   residence: "서울 강남구",
+  status_message: "강남 맛집 탐방 중 · 주말엔 등산",
   home_lat: 37.4979,
   home_lng: 127.0276,
   trust_score: 35,
@@ -402,6 +406,60 @@ export const MOCK_PROFILE = {
   places_adopted_count: 4,
   available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 35),
   available_social_titles: SOCIAL_POINT_TITLES.filter((t) => t.min_points <= 420),
+};
+
+/** 타인 프로필 모달용 mock (demo-user 제외) */
+export const MOCK_OTHER_PROFILES = {
+  "demo-member-2": {
+    id: "demo-member-2",
+    display_name: "친구 A",
+    age_group: "THIRTIES",
+    residence: "서울 마포구",
+    status_message: "주말엔 맛집, 평일엔 조용히",
+    trust_score: 18,
+    social_points: 150,
+    badge_tier: "BRONZE",
+    role: "USER",
+    selected_title_id: 1,
+    selected_title: "맛집 탐험가",
+    selected_social_title_id: 2,
+    selected_social_title: "약속 지킴이",
+    mbti_types: ["ISTJ"],
+    profile_decor: {
+      chinese_zodiac: "OX",
+      western_zodiac: "CAPRICORN",
+      blood_type: "B",
+      interest_emojis: ["☕", "📚"],
+    },
+    places_adopted_count: 1,
+    available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 18),
+    available_social_titles: SOCIAL_POINT_TITLES.filter((t) => t.min_points <= 150),
+  },
+  "demo-member-3": {
+    id: "demo-member-3",
+    display_name: "친구 B",
+    age_group: "TWENTIES",
+    residence: "경기 성남시",
+    status_message: "등산·보드게임 좋아해요",
+    trust_score: 52,
+    social_points: 820,
+    badge_tier: "GOLD",
+    role: "USER",
+    selected_title_id: 3,
+    selected_title: "미식 가이드",
+    selected_social_title_id: 5,
+    selected_social_title: "인싸 새싹",
+    mbti_types: ["INFP"],
+    profile_decor: {
+      chinese_zodiac: "DRAGON",
+      western_zodiac: "PISCES",
+      blood_type: "O",
+      interest_emojis: ["🏕️", "🎮"],
+    },
+    places_adopted_count: 6,
+    available_titles: RECOMMENDER_TITLES.filter((t) => t.min_score <= 52),
+    available_social_titles: SOCIAL_POINT_TITLES.filter((t) => t.min_points <= 820),
+  },
 };
 
 export const MOCK_HEATMAP = [

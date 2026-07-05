@@ -5,6 +5,7 @@ import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { MeetingSettlementWidget } from "@/components/MeetingSettlementWidget";
 import { RoomPraisePanel } from "@/components/RoomPraisePanel";
+import { ProfileNameButton } from "@/components/ProfileNameButton";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -195,9 +196,10 @@ export function AppointmentBriefingPanel({
                 className="rounded-xl border border-border bg-surface/50 px-4 py-3 text-sm"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-foreground">
-                    👤 {m.display_name}
-                    {m.is_me && <span className="ml-1 text-xs text-muted">(나)</span>}
+                  <span className="inline-flex flex-wrap items-center gap-1 font-medium text-foreground">
+                    👤{" "}
+                    <ProfileNameButton userId={m.user_id} displayName={m.display_name} />
+                    {m.is_me && <span className="text-xs font-normal text-muted">(나)</span>}
                   </span>
                   <span className="text-xs">
                     {p.emoji} {p.text}

@@ -7,6 +7,7 @@ import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { FourHalfStarConfirmModal } from "@/components/FourHalfStarConfirmModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { PlaceRatingPicker } from "@/components/PlaceRatingPicker";
+import { RatingDisplay } from "@/components/RatingDisplay";
 import { TopRankerEndorsementBadge } from "@/components/TopRankerEndorsementBadge";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { Button } from "@/components/ui/Button";

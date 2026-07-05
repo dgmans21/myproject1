@@ -1,29 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ProfileBadgeBorder, TrustBadge } from "@/components/ProfileBadgeBorder";
+import { Textarea } from "@/components/ui/Input";
+import { TrustBadge } from "@/components/ProfileBadgeBorder";
 import { SocialPointBadge } from "@/components/SocialPointBadge";
-import { MbtiBadge } from "@/components/MbtiBadge";
-import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
-import { ProfileThemeShell } from "@/components/ProfileThemeShell";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
+import { ProfileSummaryCard } from "@/components/ProfileSummaryCard";
 import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
 import { ProfileInterestsPanel } from "@/components/ProfileInterestsPanel";
-import { resolveProfileThemeStyle } from "@/lib/profile-theme";
-import { api, Profile, RecommenderTitle, SocialPointTitle } from "@/lib/api";
+import { api, Profile, RecommenderTitle, SocialPointTitle, toPublicProfileView } from "@/lib/api";
 import { MBTI_OPTIONS } from "@/lib/mbti";
-
-const AGE_LABELS: Record<string, string> = {
-  TEENS: "10대",
-  TWENTIES: "20대",
-  THIRTIES: "30대",
-  FORTIES: "40대",
-  FIFTIES_PLUS: "50대+",
-};
+import { PROFILE_STATUS_MAX_LENGTH } from "@/lib/profile-status";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -31,11 +21,13 @@ export default function ProfilePage() {
   const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [mbtiDraft, setMbtiDraft] = useState<string[]>([]);
+  const [statusDraft, setStatusDraft] = useState("");
 
   useEffect(() => {
     api.profiles.me().then((p) => {
       setProfile(p);
       setMbtiDraft(p.mbti_types ?? []);
+      setStatusDraft(p.status_message ?? "");
     }).catch(() => {});
     api.profiles.attendanceHeatmap().then(setHeatmap).catch(() => {});
   }, []);
@@ -81,6 +73,19 @@ export default function ProfilePage() {
     }
   };
 
+  const saveStatus = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.profiles.update({ status_message: statusDraft });
+      setProfile(updated);
+      setStatusDraft(updated.status_message ?? "");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "소개 저장 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!profile) {
     return (
       <div className="min-h-screen bg-background">
@@ -90,84 +95,20 @@ export default function ProfilePage() {
     );
   }
 
-  const activeTrustTitle = profile.available_titles?.find((t) => t.id === profile.selected_title_id)
-    ?? profile.available_titles?.[profile.available_titles.length - 1];
-
-  const activeSocialTitle = profile.available_social_titles?.find(
-    (t) => t.id === profile.selected_social_title_id
-  ) ?? profile.available_social_titles?.filter(
-    (t) => t.min_points <= profile.social_points
-  ).slice(-1)[0];
-
   const mbtiChanged =
     mbtiDraft.length !== profile.mbti_types.length ||
     mbtiDraft.some((t, i) => profile.mbti_types[i] !== t);
 
-  const profileAccent = resolveProfileThemeStyle(profile.profile_decor).accent;
+  const statusChanged = statusDraft !== (profile.status_message ?? "");
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <ProfileThemeShell decor={profile.profile_decor}>
-        <ProfileBadgeBorder
-          borderStyle={activeTrustTitle?.border_style ?? activeSocialTitle?.border_style}
-          badgeTier={profile.badge_tier}
-        >
-          <Card className="border-0 bg-transparent p-4 shadow-none sm:p-5">
-            <div className="flex flex-col gap-3">
-              <div className="min-w-0">
-                <CardTitle className="text-xl flex flex-wrap items-center gap-2">
-                  <span style={{ color: profileAccent }}>{profile.display_name}</span>
-                  <ProfileDecorBadges decor={profile.profile_decor} size={16} />
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  {AGE_LABELS[profile.age_group] ?? profile.age_group} · {profile.residence}
-                  {profile.role === "ADMIN" && (
-                    <span className="ml-2 rounded-md bg-warm/15 px-2 py-0.5 text-xs font-medium text-warm">
-                      관리자
-                    </span>
-                  )}
-                </CardDescription>
-                {profile.mbti_types.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {profile.mbti_types.map((t) => (
-                      <MbtiBadge key={t} type={t} />
-                    ))}
-                  </div>
-                )}
-              </div>
-              {(activeTrustTitle || activeSocialTitle) && (
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  {activeTrustTitle && (
-                    <TrustBadge
-                      className="max-w-full"
-                      title={activeTrustTitle.title}
-                      badgeColor={activeTrustTitle.badge_color}
-                    />
-                  )}
-                  {activeSocialTitle && (
-                    <SocialPointBadge
-                      className="max-w-full"
-                      title={activeSocialTitle.title}
-                      badgeColor={activeSocialTitle.badge_color}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-            <p className="mt-4 text-sm text-muted">
-              신뢰도 <strong className="text-foreground">{profile.trust_score}</strong>점
-              · 소셜 <strong className="text-foreground">{profile.social_points}</strong>P
-              · 장소 채택 {profile.places_adopted_count}회
-              ·{" "}
-              <Link href="/ranking" className="text-primary underline">
-                랭킹 보기
-              </Link>
-            </p>
-          </Card>
-        </ProfileBadgeBorder>
-        </ProfileThemeShell>
+        <ProfileSummaryCard
+          profile={toPublicProfileView(profile, true)}
+          showRankingLink
+        />
 
         <div className="mt-6 flex gap-2 border-b border-border overflow-x-auto">
           {([
@@ -191,6 +132,29 @@ export default function ProfilePage() {
 
         {tab === "info" && (
           <>
+            <Card className="mt-6">
+              <CardTitle className="text-base">한 줄 소개 · 상태</CardTitle>
+              <CardDescription className="mt-1">
+                나이·거주지 아래 별도 줄로 표시됩니다. 방 멤버가 프로필을 볼 때도 보입니다.
+              </CardDescription>
+              <Textarea
+                className="mt-4"
+                label="소개"
+                value={statusDraft}
+                onChange={(e) => setStatusDraft(e.target.value.slice(0, PROFILE_STATUS_MAX_LENGTH))}
+                placeholder="한 줄 소개 · 오늘의 상태 (선택)"
+                rows={2}
+                maxLength={PROFILE_STATUS_MAX_LENGTH}
+              />
+              <p className="mt-1 text-right text-xs text-muted">
+                {statusDraft.length}/{PROFILE_STATUS_MAX_LENGTH}
+              </p>
+              {statusChanged && (
+                <Button className="mt-3" size="sm" disabled={saving} onClick={saveStatus}>
+                  소개 저장
+                </Button>
+              )}
+            </Card>
             <Card className="mt-6">
               <CardTitle className="text-base">MBTI (최대 2개)</CardTitle>
               <p className="mt-1 text-sm text-muted">방 멤버 목록·칭찬 패널에 표시됩니다</p>

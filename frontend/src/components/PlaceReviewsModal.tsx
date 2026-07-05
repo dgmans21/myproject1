@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { ProfileNameButton } from "@/components/ProfileNameButton";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { ProfileDecorBadges } from "@/components/ProfileDecorBadges";
 import { RatingDisplay } from "@/components/RatingDisplay";
@@ -133,8 +134,8 @@ export function PlaceReviewsModal({
                   className="rounded-xl border border-border bg-surface/50 px-3 py-3"
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-medium text-sm text-foreground inline-flex items-center gap-1">
-                      {r.display_name}
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground">
+                      <ProfileNameButton userId={r.user_id} displayName={r.display_name} />
                       <ProfileDecorBadges decor={r.profile_decor} />
                       {r.is_me && (
                         <span className="text-[10px] font-normal text-muted">(나)</span>

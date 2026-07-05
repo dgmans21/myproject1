@@ -16,6 +16,7 @@ import { RoomHostTransferPanel } from "@/components/RoomHostTransferPanel";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
 import { InviteLinkPanel } from "@/components/InviteLinkPanel";
 import { RoomActionMenu } from "@/components/RoomActionMenu";
+import { ProfileNameButton } from "@/components/ProfileNameButton";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { MeetingPurposeSelector } from "@/components/MeetingPurposeSelector";
 import { TeamScheduleRoomPanel } from "@/components/TeamScheduleRoomPanel";
@@ -215,7 +216,7 @@ export default function GroupDetailPage() {
               {members.map((m) => (
                 <li key={m.user_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
-                    {m.display_name}
+                    <ProfileNameButton userId={m.user_id} displayName={m.display_name} />
                     <ProfileDecorBadges
                       decor={m.profile_decor}
                       maxItems={MEMBER_DECOR_DISPLAY_LIMIT}

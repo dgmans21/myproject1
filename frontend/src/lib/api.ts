@@ -9,6 +9,7 @@ import {
   MOCK_PLACE_REVIEWS,
   MOCK_PLACES,
   MOCK_PROFILE,
+  MOCK_OTHER_PROFILES,
   MOCK_RANKING,
   MOCK_ROOM_HEATMAP,
   MOCK_ROOM_MEMBERS,
@@ -34,7 +35,9 @@ import {
   PROFILE_THEME_PRESET_IDS,
 } from "./profile-decor-icons";
 import { normalizeInterestEmojis } from "./profile-interests";
+import { normalizeProfileStatus } from "./profile-status";
 import { isValidRoomAccent } from "./room-accent";
+import { generateInviteToken, defaultInviteExpiry } from "./invite-token";
 import { isValidMeetingPurpose, type MeetingPurposeId } from "./meeting-purpose";
 import {
   buildTrustRankIndex,
@@ -57,6 +60,9 @@ let mockRooms = [...MOCK_ROOMS] as Room[];
 let mockAppointments = [...MOCK_APPOINTMENTS] as Appointment[];
 let mockPlaces = [...MOCK_PLACES] as Place[];
 let mockProfile = { ...MOCK_PROFILE } as Profile;
+let mockOtherProfiles: Record<string, Profile> = Object.fromEntries(
+  Object.entries(MOCK_OTHER_PROFILES).map(([id, p]) => [id, { ...p, id } as Profile])
+);
 /** 유저별 장소 평점 (데모) */
 let mockUserRatings: Record<string, number> = {};
 let mockFourHalfUsed = 0;
@@ -277,6 +283,7 @@ function addCurrentUserToRoom(roomId: string, role: "OWNER" | "MEMBER" = "MEMBER
     {
       user_id: mockProfile.id,
       display_name: mockProfile.display_name,
+      status_message: mockProfile.status_message,
       role,
       social_points: mockProfile.social_points,
       social_title: mockProfile.selected_social_title,
@@ -313,6 +320,63 @@ function syncMemberDecor(userId: string, decor?: ProfileDecorFields) {
       m.user_id === userId ? { ...m, profile_decor: decor ? { ...decor } : undefined } : m
     );
   }
+}
+
+function syncMemberProfileFields(
+  userId: string,
+  fields: Partial<
+    Pick<
+      RoomMember,
+      "display_name" | "status_message" | "social_points" | "social_title" | "social_badge_color" | "mbti_types" | "profile_decor"
+    >
+  >
+) {
+  for (const roomId of Object.keys(mockRoomMembersState)) {
+    mockRoomMembersState[roomId] = getRoomMembers(roomId).map((m) =>
+      m.user_id === userId ? { ...m, ...fields } : m
+    );
+  }
+}
+
+function buildPublicProfileView(profile: Profile, isMe: boolean): PublicProfileView {
+  const trustFromList = profile.available_titles?.find((t) => t.id === profile.selected_title_id);
+  const socialFromList = profile.available_social_titles?.find(
+    (t) => t.id === profile.selected_social_title_id
+  );
+  return {
+    id: profile.id,
+    display_name: profile.display_name,
+    age_group: profile.age_group,
+    residence: profile.residence,
+    status_message: profile.status_message,
+    mbti_types: [...profile.mbti_types],
+    profile_decor: profile.profile_decor ? { ...profile.profile_decor } : undefined,
+    trust_score: profile.trust_score,
+    social_points: profile.social_points,
+    badge_tier: profile.badge_tier,
+    role: profile.role,
+    places_adopted_count: profile.places_adopted_count,
+    selected_title_id: profile.selected_title_id,
+    selected_social_title_id: profile.selected_social_title_id,
+    trust_title: profile.selected_title ?? trustFromList?.title,
+    trust_badge_color: trustFromList?.badge_color,
+    social_title: profile.selected_social_title ?? socialFromList?.title,
+    social_badge_color: socialFromList?.badge_color,
+    available_titles: profile.available_titles,
+    available_social_titles: profile.available_social_titles,
+    is_me: isMe,
+  };
+}
+
+function getProfileById(userId: string): Profile {
+  if (userId === mockProfile.id) return mockProfile;
+  const other = mockOtherProfiles[userId];
+  if (!other) throw new Error("프로필을 찾을 수 없습니다");
+  return other;
+}
+
+export function toPublicProfileView(profile: Profile, isMe: boolean): PublicProfileView {
+  return buildPublicProfileView(profile, isMe);
 }
 
 function getRoomOwner(members: RoomMember[]): RoomMember | undefined {
@@ -759,6 +823,11 @@ export const api = {
       await delay();
       return mockProfile;
     },
+    get: async (userId: string) => {
+      await delay();
+      const profile = getProfileById(userId);
+      return buildPublicProfileView(profile, userId === mockProfile.id);
+    },
     ratingQuota: async () => {
       await delay();
       return buildMockRatingQuota();
@@ -783,8 +852,12 @@ export const api = {
       if (data.mbti_types && data.mbti_types.length > 2) {
         throw new Error("MBTI는 최대 2개까지 선택할 수 있습니다");
       }
-      const { profile_decor, ...rest } = data;
+      const { profile_decor, status_message, ...rest } = data;
       mockProfile = { ...mockProfile, ...rest };
+      if (status_message !== undefined) {
+        const normalized = normalizeProfileStatus(status_message);
+        mockProfile.status_message = normalized || undefined;
+      }
       if (profile_decor !== undefined) {
         validateProfileDecor(profile_decor);
         mockProfile.profile_decor = { ...mockProfile.profile_decor, ...profile_decor };
@@ -794,6 +867,14 @@ export const api = {
         const t = SOCIAL_POINT_TITLES.find((x) => x.id === data.selected_social_title_id);
         if (t) mockProfile.selected_social_title = t.title;
       }
+      syncMemberProfileFields(mockProfile.id, {
+        display_name: mockProfile.display_name,
+        status_message: mockProfile.status_message,
+        social_points: mockProfile.social_points,
+        social_title: mockProfile.selected_social_title,
+        mbti_types: [...mockProfile.mbti_types],
+        profile_decor: mockProfile.profile_decor ? { ...mockProfile.profile_decor } : undefined,
+      });
       return mockProfile;
     },
     attendanceHeatmap: async () => {
@@ -854,6 +935,7 @@ export const api = {
         {
           user_id: mockProfile.id,
           display_name: mockProfile.display_name,
+          status_message: mockProfile.status_message,
           role: "OWNER",
           social_points: mockProfile.social_points,
           social_title: mockProfile.selected_social_title,
@@ -1503,6 +1585,7 @@ export interface Profile {
   display_name: string;
   age_group: "TEENS" | "TWENTIES" | "THIRTIES" | "FORTIES" | "FIFTIES_PLUS";
   residence: string;
+  status_message?: string;
   home_address?: string;
   home_lat?: number;
   home_lng?: number;
@@ -1529,6 +1612,31 @@ export interface Profile {
   places_adopted_count: number;
   available_titles?: RecommenderTitle[];
   available_social_titles?: SocialPointTitle[];
+}
+
+/** 프로필 모달 · 요약 카드용 (본인/타인 공통) */
+export interface PublicProfileView {
+  id: string;
+  display_name: string;
+  age_group: Profile["age_group"];
+  residence: string;
+  status_message?: string;
+  mbti_types: string[];
+  profile_decor?: ProfileDecorFields;
+  trust_score: number;
+  social_points: number;
+  badge_tier: Profile["badge_tier"];
+  role: Profile["role"];
+  places_adopted_count: number;
+  selected_title_id?: number;
+  selected_social_title_id?: number;
+  trust_title?: string;
+  trust_badge_color?: string;
+  social_title?: string;
+  social_badge_color?: string;
+  available_titles?: RecommenderTitle[];
+  available_social_titles?: SocialPointTitle[];
+  is_me: boolean;
 }
 
 export interface Room {
@@ -1607,6 +1715,7 @@ export interface RoomActivityDay {
 export interface RoomMember {
   user_id: string;
   display_name: string;
+  status_message?: string;
   role: string;
   social_points: number;
   social_title?: string;
