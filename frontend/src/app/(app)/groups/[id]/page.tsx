@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -95,10 +94,8 @@ export default function GroupDetailPage() {
   const readOnly = isGuestSession();
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <Link href="/groups" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-4">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6">
+        <Link href="/groups" className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> 방 목록
         </Link>
 
@@ -283,7 +280,6 @@ export default function GroupDetailPage() {
           )}
         </div>
         )}
-      </main>
 
       <GuestPromptModal
         open={guestPrompt}

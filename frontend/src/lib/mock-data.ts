@@ -154,6 +154,27 @@ export const MOCK_APPOINTMENTS = [
     confirmed_place_id: DEMO_PLACE_IDS.gangnam,
     created_at: "2026-06-12T09:00:00Z",
   },
+  {
+    id: "demo-apt-4",
+    room_id: "demo-room-1",
+    title: "5월 뒷풀이",
+    description: "홍대 근처에서 가볍게",
+    status: "confirmed" as const,
+    confirmed_date: "2026-05-10",
+    confirmed_time: "18:30:00",
+    confirmed_place_id: DEMO_PLACE_IDS.hongdae,
+    created_at: "2026-05-01T09:00:00Z",
+  },
+  {
+    id: "demo-apt-5",
+    room_id: "demo-team-schedule-1",
+    title: "6월 2주 스프린트 회고",
+    description: "팀 간이 회의록",
+    status: "confirmed" as const,
+    confirmed_date: "2026-06-14",
+    confirmed_time: "14:00:00",
+    created_at: "2026-06-07T09:00:00Z",
+  },
 ];
 
 export const MOCK_DATE_SUMMARY = [

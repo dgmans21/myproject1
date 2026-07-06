@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -141,18 +140,13 @@ export default function AppointmentPage() {
 
   if (!appointment) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <main className="mx-auto max-w-4xl px-4 py-8 text-center text-muted">불러오는 중...</main>
-      </div>
+      <div className="mx-auto w-full max-w-4xl px-4 py-12 text-center text-muted">불러오는 중...</div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <Link href={`/groups/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-4">
+    <div className="mx-auto w-full max-w-4xl px-4 py-6">
+        <Link href={`/groups/${groupId}`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> 방으로
         </Link>
 
@@ -161,7 +155,13 @@ export default function AppointmentPage() {
             <h1 className="text-2xl font-bold text-foreground">{appointment.title}</h1>
           </div>
           {appointment.status === "confirmed" ? (
-            <p className="mt-1 text-sm text-muted">확정된 약속 · 당일 브리핑</p>
+            <p className="mt-1 text-sm text-muted">
+              확정된 약속 · 당일 브리핑 ·{" "}
+              <Link href="/meetings/memories" className="text-primary/90 hover:underline">
+                추억록에 남기기
+              </Link>
+              <span className="text-muted/70"> (선택)</span>
+            </p>
           ) : (
             <Badge className="mt-2" variant="primary">
               {STATUS_LABELS[appointment.status]}
@@ -315,7 +315,6 @@ export default function AppointmentPage() {
             )}
           </div>
         )}
-      </main>
 
       <GuestPromptModal
         open={guestPrompt}

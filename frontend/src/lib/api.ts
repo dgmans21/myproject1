@@ -48,6 +48,44 @@ import { applyHybridOverrides } from "@/lib/api-hybrid";
 
 const SAMPLE_ROOM_IDS = new Set(["demo-room-1", "demo-room-2", "demo-room-invite-pending", "demo-team-schedule-1"]);
 
+type MockVisitRow = {
+  id: string;
+  visited_at: string;
+  session_key: string;
+  user_id?: string;
+  display_name?: string;
+  path: string;
+  browser_family: string;
+  os_family: string;
+  ip_hash: string;
+  ip_masked?: string;
+  user_agent?: string;
+  referrer?: string;
+};
+
+const mockVisitEvents: MockVisitRow[] = [];
+
+function mockBrowserFromUa(ua?: string): { browser: string; os: string } {
+  const u = (ua ?? "").toLowerCase();
+  let browser = "Other";
+  if (u.includes("firefox")) browser = "Firefox";
+  else if (u.includes("chrome")) browser = "Chrome";
+  else if (u.includes("safari")) browser = "Safari";
+  let os = "Other";
+  if (u.includes("windows")) os = "Windows";
+  else if (u.includes("mac")) os = "macOS";
+  else if (u.includes("android")) os = "Android";
+  return { browser, os };
+}
+
+function kstTodayKey(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function visitKstDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
 const MAX_FIVE_STAR_TOTAL = 5;
@@ -59,6 +97,26 @@ function currentMonthYear() {
 
 let mockRooms = [...MOCK_ROOMS] as Room[];
 let mockAppointments = [...MOCK_APPOINTMENTS] as Appointment[];
+/** appointment_id → user_id → memo */
+let mockMeetingMemos: Record<
+  string,
+  Record<string, { id: string; body: string; created_at: string; updated_at: string }>
+> = {
+  "demo-apt-3": {
+    [MOCK_PROFILE.id]: {
+      id: "mm-demo-1",
+      body: "분위기 좋았고 곱창이 진짜 맛있었어요. 다음에도 여기로 가도 될 듯.",
+      created_at: "2026-06-23T10:00:00Z",
+      updated_at: "2026-06-23T10:00:00Z",
+    },
+    "demo-member-2": {
+      id: "mm-demo-2",
+      body: "2차는 근처 포차로…",
+      created_at: "2026-06-23T11:00:00Z",
+      updated_at: "2026-06-23T11:00:00Z",
+    },
+  },
+};
 let mockPlaces = [...MOCK_PLACES] as Place[];
 let mockProfile = { ...MOCK_PROFILE } as Profile;
 let mockOtherProfiles: Record<string, Profile> = Object.fromEntries(
@@ -388,6 +446,64 @@ function assignOwnerIfMissing(roomId: string, userId: string) {
   mockRoomMembersState[roomId] = members.map((m) =>
     m.user_id === userId ? { ...m, role: "OWNER" } : m
   );
+}
+
+function buildMockMeetingMemoryList(): MeetingMemoryListItem[] {
+  const myId = mockProfile.id;
+  const roomMap = Object.fromEntries(mockRooms.map((r) => [r.id, r]));
+  const placeMap = Object.fromEntries(mockPlaces.map((p) => [p.id, p]));
+
+  return mockAppointments
+    .filter((a) => a.status === "confirmed" && a.confirmed_date)
+    .sort((a, b) => {
+      const ad = `${a.confirmed_date}T${a.confirmed_time ?? "00:00:00"}`;
+      const bd = `${b.confirmed_date}T${b.confirmed_time ?? "00:00:00"}`;
+      return bd.localeCompare(ad);
+    })
+    .map((apt) => {
+      const room = roomMap[apt.room_id];
+      const place = apt.confirmed_place_id ? placeMap[apt.confirmed_place_id] : undefined;
+      const memos = mockMeetingMemos[apt.id] ?? {};
+      const myMemo = memos[myId];
+      const memoBodies = Object.values(memos).filter((m) => m.body.trim());
+      const preview = myMemo?.body.trim() ? myMemo.body.trim().slice(0, 120) : undefined;
+      return {
+        appointment_id: apt.id,
+        room_id: apt.room_id,
+        room_name: room?.name ?? "방",
+        room_type: room?.room_type ?? "REGULAR",
+        title: apt.title,
+        confirmed_date: apt.confirmed_date!,
+        confirmed_time: apt.confirmed_time ?? "00:00:00",
+        place_id: apt.confirmed_place_id,
+        place_name: place?.name,
+        my_memo_preview: preview,
+        my_memo_updated_at: myMemo?.updated_at,
+        memo_count: memoBodies.length,
+      };
+    });
+}
+
+function buildMockMeetingMemoItems(appointmentId: string): MeetingMemoryMemoItem[] {
+  const memos = mockMeetingMemos[appointmentId] ?? {};
+  return Object.entries(memos)
+    .filter(([, m]) => m.body.trim())
+    .map(([userId, m]) => {
+      const name =
+        userId === mockProfile.id
+          ? mockProfile.display_name
+          : mockOtherProfiles[userId]?.display_name ?? "알 수 없음";
+      return {
+        id: m.id,
+        user_id: userId,
+        display_name: name,
+        body: m.body.trim(),
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+        is_me: userId === mockProfile.id,
+      };
+    })
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
 function getPlaceRatingsForEndorsement(
@@ -1402,6 +1518,50 @@ const mockApi = {
       await delay();
       return MOCK_SETTLEMENT as MeetingSettlement;
     },
+    listMeetingMemories: async () => {
+      await delay();
+      return buildMockMeetingMemoryList();
+    },
+    listMeetingMemos: async (appointmentId: string) => {
+      await delay();
+      const apt = mockAppointments.find((a) => a.id === appointmentId);
+      if (!apt || apt.status !== "confirmed") {
+        throw new Error("확정된 약속만 조회할 수 있습니다");
+      }
+      return buildMockMeetingMemoItems(appointmentId);
+    },
+    upsertMyMeetingMemo: async (appointmentId: string, body: string) => {
+      await delay();
+      const apt = mockAppointments.find((a) => a.id === appointmentId);
+      if (!apt || apt.status !== "confirmed") {
+        throw new Error("확정된 약속에만 메모를 남길 수 있습니다");
+      }
+      const trimmed = body.trim();
+      const now = new Date().toISOString();
+      if (!mockMeetingMemos[appointmentId]) mockMeetingMemos[appointmentId] = {};
+      const existing = mockMeetingMemos[appointmentId][mockProfile.id];
+      if (existing) {
+        existing.body = trimmed;
+        existing.updated_at = now;
+      } else {
+        mockMeetingMemos[appointmentId][mockProfile.id] = {
+          id: `mm-${Date.now()}`,
+          body: trimmed,
+          created_at: now,
+          updated_at: now,
+        };
+      }
+      const row = mockMeetingMemos[appointmentId][mockProfile.id];
+      return {
+        id: row.id,
+        user_id: mockProfile.id,
+        display_name: mockProfile.display_name,
+        body: trimmed,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        is_me: true,
+      };
+    },
   },
   teamSchedule: {
     listMonthMemos: async (roomId: string, year: number, month: number) => {
@@ -1558,6 +1718,67 @@ const mockApi = {
         duration_minutes: 25 + Math.floor(Math.random() * 20),
         distance_meters: 8500 + Math.floor(Math.random() * 5000),
         route_summary: `약 ${25 + Math.floor(Math.random() * 20)}분 · 데모 경로`,
+      };
+    },
+  },
+  analytics: {
+    recordVisit: async (data: {
+      path: string;
+      sessionKey: string;
+      userAgent?: string;
+      referrer?: string;
+    }) => {
+      await delay();
+      const { browser, os } = mockBrowserFromUa(data.userAgent);
+      mockVisitEvents.unshift({
+        id: `mv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        visited_at: new Date().toISOString(),
+        session_key: data.sessionKey,
+        user_id: mockProfile.id,
+        display_name: mockProfile.display_name,
+        path: data.path,
+        browser_family: browser,
+        os_family: os,
+        ip_hash: "mock-ip-hash",
+        ip_masked: "127.0.0.xxx",
+        user_agent: data.userAgent?.slice(0, 512),
+        referrer: data.referrer,
+      });
+    },
+    todayCount: async () => {
+      await delay();
+      const today = kstTodayKey();
+      const keys = new Set(
+        mockVisitEvents
+          .filter((e) => visitKstDate(e.visited_at) === today)
+          .map((e) => e.session_key)
+      );
+      return { count: keys.size, date: today };
+    },
+    listVisits: async (params: {
+      dateFrom?: string;
+      dateTo?: string;
+      browser?: string;
+      path?: string;
+      ip?: string;
+      limit?: number;
+      offset?: number;
+    }) => {
+      await delay();
+      if (mockProfile.role !== "ADMIN") {
+        throw new Error("관리자만 조회할 수 있습니다");
+      }
+      let rows = [...mockVisitEvents];
+      if (params.browser) rows = rows.filter((r) => r.browser_family === params.browser);
+      if (params.path) rows = rows.filter((r) => r.path.includes(params.path!));
+      const offset = params.offset ?? 0;
+      const limit = params.limit ?? 50;
+      const slice = rows.slice(offset, offset + limit);
+      return {
+        items: slice.map((r) => ({ ...r })),
+        total: rows.length,
+        limit,
+        offset,
       };
     },
   },
@@ -1777,6 +1998,31 @@ export interface TravelTimeResponse {
   route_summary: string;
 }
 
+export interface MeetingMemoryListItem {
+  appointment_id: string;
+  room_id: string;
+  room_name: string;
+  room_type: Room["room_type"];
+  title: string;
+  confirmed_date: string;
+  confirmed_time: string;
+  place_id?: string;
+  place_name?: string;
+  my_memo_preview?: string;
+  my_memo_updated_at?: string;
+  memo_count: number;
+}
+
+export interface MeetingMemoryMemoItem {
+  id: string;
+  user_id: string;
+  display_name: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  is_me?: boolean;
+}
+
 export interface Appointment {
   id: string;
   room_id: string;
@@ -1944,6 +2190,33 @@ export interface RankingEntry {
   badge_color?: string;
   badge_tier: Profile["badge_tier"];
   is_me: boolean;
+}
+
+export interface SiteVisitTodayCount {
+  count: number;
+  date: string;
+}
+
+export interface SiteVisitEvent {
+  id: string;
+  visited_at: string;
+  session_key: string;
+  user_id?: string | null;
+  display_name?: string | null;
+  path: string;
+  browser_family: string;
+  os_family: string;
+  ip_hash: string;
+  ip_masked?: string | null;
+  user_agent?: string | null;
+  referrer?: string | null;
+}
+
+export interface SiteVisitListResult {
+  items: SiteVisitEvent[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface PlaceCreate {

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Navbar } from "@/components/Navbar";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { FourHalfStarConfirmModal } from "@/components/FourHalfStarConfirmModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
@@ -173,14 +172,8 @@ export default function PlacesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">맛집 탐색</h1>
-            <p className="mt-1 text-muted">맛집 등급 · 추천 투표 · 이동 시간 안내</p>
-          </div>
+    <div className="mx-auto w-full max-w-6xl px-4 py-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex gap-2">
             <Link href="/places/map">
               <Button variant="secondary">
@@ -362,7 +355,6 @@ export default function PlacesPage() {
             ))
           )}
         </div>
-      </main>
 
       <FourHalfStarConfirmModal
         open={Boolean(fourHalfConfirm)}

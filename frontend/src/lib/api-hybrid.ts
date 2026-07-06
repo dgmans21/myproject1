@@ -2,6 +2,8 @@ import { getApiMode } from "@/lib/api-config";
 import { apiFetch, apiFetchPublic, getAccessToken, getCurrentUserId } from "@/lib/api/http-client";
 import { isGuestSession } from "@/lib/auth-session";
 import type {
+  MeetingMemoryListItem,
+  MeetingMemoryMemoItem,
   Place,
   PlaceCreate,
   PlaceReviewsResponse,
@@ -56,6 +58,50 @@ type MockApi = {
       id: string,
       vote: "RECOMMEND" | "NOT_RECOMMEND"
     ) => Promise<{ ok: boolean; my_vote: "RECOMMEND" | "NOT_RECOMMEND" | null }>;
+  };
+  analytics: {
+    recordVisit: (data: {
+      path: string;
+      sessionKey: string;
+      userAgent?: string;
+      referrer?: string;
+    }) => Promise<void>;
+    todayCount: () => Promise<{ count: number; date: string }>;
+    listVisits: (params: {
+      dateFrom?: string;
+      dateTo?: string;
+      browser?: string;
+      path?: string;
+      ip?: string;
+      limit?: number;
+      offset?: number;
+    }) => Promise<{
+      items: Array<{
+        id: string;
+        visited_at: string;
+        session_key: string;
+        user_id?: string | null;
+        display_name?: string | null;
+        path: string;
+        browser_family: string;
+        os_family: string;
+        ip_hash: string;
+        ip_masked?: string | null;
+        user_agent?: string | null;
+        referrer?: string | null;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>;
+  };
+  appointments: {
+    listMeetingMemories: () => Promise<MeetingMemoryListItem[]>;
+    listMeetingMemos: (appointmentId: string) => Promise<MeetingMemoryMemoItem[]>;
+    upsertMyMeetingMemo: (
+      appointmentId: string,
+      body: string
+    ) => Promise<MeetingMemoryMemoItem>;
   };
 };
 
@@ -300,6 +346,69 @@ export function applyHybridOverrides<T extends MockApi>(mock: T): T {
           body: JSON.stringify({ vote_type: vote }),
         });
         return { ok: true, my_vote: vote };
+      },
+    },
+    appointments: {
+      ...mock.appointments,
+      listMeetingMemories: async () => {
+        if (!(await useHttp())) return mock.appointments.listMeetingMemories();
+        const rows = await apiFetch<MeetingMemoryListItem[]>("/appointments/meeting-memories");
+        return rows.map((r) => ({
+          ...r,
+          appointment_id: String(r.appointment_id),
+          room_id: String(r.room_id),
+          place_id: r.place_id ? String(r.place_id) : undefined,
+        }));
+      },
+      listMeetingMemos: async (appointmentId: string) => {
+        if (!(await useHttp())) return mock.appointments.listMeetingMemos(appointmentId);
+        const rows = await apiFetch<MeetingMemoryMemoItem[]>(
+          `/appointments/${appointmentId}/meeting-memos`
+        );
+        return rows.map((r) => ({
+          ...r,
+          user_id: String(r.user_id),
+        }));
+      },
+      upsertMyMeetingMemo: async (appointmentId: string, body: string) => {
+        if (!(await useHttp())) return mock.appointments.upsertMyMeetingMemo(appointmentId, body);
+        const row = await apiFetch<MeetingMemoryMemoItem>(
+          `/appointments/${appointmentId}/meeting-memos/me`,
+          { method: "PUT", body: JSON.stringify({ body }) }
+        );
+        return { ...row, user_id: String(row.user_id) };
+      },
+    },
+    analytics: {
+      recordVisit: async (data) => {
+        if (getApiMode() === "mock") return mock.analytics.recordVisit(data);
+        await apiFetchPublic("/analytics/visit", {
+          method: "POST",
+          headers: { "X-Visit-Session": data.sessionKey },
+          body: JSON.stringify({
+            path: data.path,
+            session_key: data.sessionKey,
+            user_agent: data.userAgent,
+            referrer: data.referrer,
+          }),
+        });
+      },
+      todayCount: async () => {
+        if (getApiMode() === "mock") return mock.analytics.todayCount();
+        return apiFetchPublic<{ count: number; date: string }>("/analytics/today-count");
+      },
+      listVisits: async (params) => {
+        if (getApiMode() === "mock") return mock.analytics.listVisits(params);
+        const q = new URLSearchParams();
+        if (params.dateFrom) q.set("date_from", params.dateFrom);
+        if (params.dateTo) q.set("date_to", params.dateTo);
+        if (params.browser) q.set("browser", params.browser);
+        if (params.path) q.set("path", params.path);
+        if (params.ip) q.set("ip", params.ip);
+        if (params.limit != null) q.set("limit", String(params.limit));
+        if (params.offset != null) q.set("offset", String(params.offset));
+        const suffix = q.toString() ? `?${q.toString()}` : "";
+        return apiFetch(`/analytics/visits${suffix}`);
       },
     },
   };

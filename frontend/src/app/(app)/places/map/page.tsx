@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Navbar } from "@/components/Navbar";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
@@ -38,22 +37,17 @@ export default function PlacesMapPage() {
   const selected = places.find((p) => p.id === selectedId);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6">
         <Link
           href="/places"
-          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-4"
+          className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> 맛집 목록
         </Link>
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">맛집 지도</h1>
-          <p className="mt-1 text-sm text-muted">
-            Kakao Maps SDK · clusterer(다중 마커) · 카카오맵 길찾기 연동
-          </p>
-        </div>
+        <p className="mb-6 text-sm text-muted">
+          Kakao Maps SDK · clusterer(다중 마커) · 카카오맵 길찾기 연동
+        </p>
 
         <KakaoMap
           markers={markers}
@@ -104,7 +98,6 @@ export default function PlacesMapPage() {
             <p className="mt-2">표시할 장소가 없습니다</p>
           </div>
         )}
-      </main>
 
       <PlaceReviewsModal
         open={Boolean(reviewsModal)}

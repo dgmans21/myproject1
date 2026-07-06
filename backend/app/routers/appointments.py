@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,9 @@ from app.models.schemas import (
     DateVoteCreate,
     DepartureStatus,
     DepartureStatusUpdate,
+    MeetingMemoryListItem,
+    MeetingMemoryMemoItem,
+    MeetingMemoryMemoUpsert,
     MeetingSettlement,
     TimeSlotSummary,
     TimeVoteCreate,
@@ -29,6 +33,184 @@ from app.services.briefing import (
 from app.routers.rooms import _ensure_member
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
+
+
+@router.get("/meeting-memories", response_model=list[MeetingMemoryListItem])
+async def list_meeting_memories(user_id: str = Depends(get_current_user_id)):
+    """확정된 약속 목록 + 내 메모 미리보기 (추억록)"""
+    sb = get_supabase()
+    memberships = (
+        sb.table("room_members").select("room_id").eq("user_id", user_id).execute()
+    )
+    room_ids = [m["room_id"] for m in memberships.data or []]
+    if not room_ids:
+        return []
+
+    apts = (
+        sb.table("appointments")
+        .select("*")
+        .in_("room_id", room_ids)
+        .eq("status", AppointmentStatus.confirmed.value)
+        .not_.is_("confirmed_date", "null")
+        .order("confirmed_date", desc=True)
+        .order("confirmed_time", desc=True)
+        .execute()
+    )
+
+    items: list[MeetingMemoryListItem] = []
+    for apt in apts.data or []:
+        room = (
+            sb.table("rooms")
+            .select("name, room_type")
+            .eq("id", apt["room_id"])
+            .single()
+            .execute()
+        )
+        room_data = room.data or {}
+        place_name = None
+        place_id = apt.get("confirmed_place_id")
+        if place_id:
+            place = (
+                sb.table("places")
+                .select("name")
+                .eq("id", str(place_id))
+                .single()
+                .execute()
+            )
+            if place.data:
+                place_name = place.data["name"]
+
+        memo_rows = (
+            sb.table("appointment_meeting_memos")
+            .select("user_id, body, updated_at")
+            .eq("appointment_id", apt["id"])
+            .execute()
+        )
+        memos = memo_rows.data or []
+        my_memo = next((m for m in memos if str(m["user_id"]) == user_id), None)
+        preview = None
+        my_updated = None
+        if my_memo and (my_memo.get("body") or "").strip():
+            preview = (my_memo["body"] or "").strip()[:120]
+            my_updated = my_memo.get("updated_at")
+
+        items.append(
+            MeetingMemoryListItem(
+                appointment_id=str(apt["id"]),
+                room_id=str(apt["room_id"]),
+                room_name=room_data.get("name") or "방",
+                room_type=room_data.get("room_type") or "REGULAR",
+                title=apt["title"],
+                confirmed_date=apt["confirmed_date"],
+                confirmed_time=apt["confirmed_time"],
+                place_id=str(place_id) if place_id else None,
+                place_name=place_name,
+                my_memo_preview=preview,
+                my_memo_updated_at=my_updated,
+                memo_count=len([m for m in memos if (m.get("body") or "").strip()]),
+            )
+        )
+    return items
+
+
+@router.get("/{appointment_id}/meeting-memos", response_model=list[MeetingMemoryMemoItem])
+async def list_appointment_meeting_memos(
+    appointment_id: UUID, user_id: str = Depends(get_current_user_id)
+):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    if apt.get("status") != AppointmentStatus.confirmed.value:
+        raise HTTPException(status_code=400, detail="확정된 약속만 조회할 수 있습니다")
+
+    rows = (
+        sb.table("appointment_meeting_memos")
+        .select("id, user_id, body, created_at, updated_at, profiles(display_name)")
+        .eq("appointment_id", str(appointment_id))
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    items: list[MeetingMemoryMemoItem] = []
+    for row in rows.data or []:
+        body = (row.get("body") or "").strip()
+        if not body:
+            continue
+        prof = row.get("profiles") or {}
+        items.append(
+            MeetingMemoryMemoItem(
+                id=str(row["id"]),
+                user_id=str(row["user_id"]),
+                display_name=prof.get("display_name") or "알 수 없음",
+                body=body,
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                is_me=str(row["user_id"]) == user_id,
+            )
+        )
+    return items
+
+
+@router.put("/{appointment_id}/meeting-memos/me", response_model=MeetingMemoryMemoItem)
+async def upsert_my_meeting_memo(
+    appointment_id: UUID,
+    body: MeetingMemoryMemoUpsert,
+    user_id: str = Depends(get_current_user_id),
+):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    if apt.get("status") != AppointmentStatus.confirmed.value:
+        raise HTTPException(status_code=400, detail="확정된 약속에만 메모를 남길 수 있습니다")
+
+    trimmed = (body.body or "").strip()
+    existing = (
+        sb.table("appointment_meeting_memos")
+        .select("id")
+        .eq("appointment_id", str(appointment_id))
+        .eq("user_id", user_id)
+        .execute()
+    )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = {"body": trimmed, "updated_at": now_iso}
+    if existing.data:
+        saved = (
+            sb.table("appointment_meeting_memos")
+            .update(payload)
+            .eq("appointment_id", str(appointment_id))
+            .eq("user_id", user_id)
+            .execute()
+        )
+        row = saved.data[0]
+    else:
+        saved = (
+            sb.table("appointment_meeting_memos")
+            .insert(
+                {
+                    "appointment_id": str(appointment_id),
+                    "user_id": user_id,
+                    "body": trimmed,
+                }
+            )
+            .execute()
+        )
+        row = saved.data[0]
+
+    prof = (
+        sb.table("profiles")
+        .select("display_name")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    return MeetingMemoryMemoItem(
+        id=str(row["id"]),
+        user_id=user_id,
+        display_name=(prof.data or {}).get("display_name") or "나",
+        body=trimmed,
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        is_me=True,
+    )
 
 
 @router.get("/room/{room_id}", response_model=list[AppointmentResponse])

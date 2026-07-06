@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Navbar } from "@/components/Navbar";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -14,7 +13,9 @@ import { ProfileInterestsPanel } from "@/components/ProfileInterestsPanel";
 import { api, Profile, RecommenderTitle, SocialPointTitle, toPublicProfileView } from "@/lib/api";
 import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { MBTI_OPTIONS } from "@/lib/mbti";
+import { isAdmin } from "@/lib/permissions";
 import { PROFILE_STATUS_MAX_LENGTH } from "@/lib/profile-status";
+import Link from "next/link";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -115,10 +116,7 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <main className="mx-auto max-w-3xl px-4 py-8 text-center text-muted">불러오는 중...</main>
-      </div>
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 text-center text-muted">불러오는 중...</div>
     );
   }
 
@@ -132,9 +130,7 @@ export default function ProfilePage() {
     ageGroupDraft !== profile.age_group || residenceDraft.trim() !== profile.residence;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-6">
         <ProfileSummaryCard
           profile={toPublicProfileView(profile, true)}
           showRankingLink
@@ -259,6 +255,13 @@ export default function ProfilePage() {
               <CardTitle className="text-base">약속 이행 잔디</CardTitle>
               <CalendarHeatmap data={heatmap} className="mt-4" />
             </Card>
+            {isAdmin(profile) && (
+              <p className="mt-6 text-center text-sm">
+                <Link href="/admin/visits" className="text-muted hover:text-primary hover:underline">
+                  방문 조회 (관리자)
+                </Link>
+              </p>
+            )}
           </>
         )}
 
@@ -342,7 +345,6 @@ export default function ProfilePage() {
             </div>
           </Card>
         )}
-      </main>
     </div>
   );
 }

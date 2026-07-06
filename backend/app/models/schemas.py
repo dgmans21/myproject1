@@ -446,3 +446,66 @@ class AppointmentBriefingResponse(BaseModel):
 
 class DepartureStatusUpdate(BaseModel):
     status: DepartureStatus
+
+
+class SiteVisitRecordRequest(BaseModel):
+    path: str = "/"
+    session_key: str | None = None
+    user_agent: str | None = None
+    referrer: str | None = None
+
+
+class SiteVisitTodayCountResponse(BaseModel):
+    count: int
+    date: str
+
+
+class SiteVisitEventItem(BaseModel):
+    id: str
+    visited_at: datetime
+    session_key: str
+    user_id: str | None = None
+    display_name: str | None = None
+    path: str
+    browser_family: str
+    os_family: str
+    ip_hash: str
+    ip_masked: str | None = None
+    user_agent: str | None = None
+    referrer: str | None = None
+
+
+class SiteVisitListResponse(BaseModel):
+    items: list[SiteVisitEventItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class MeetingMemoryMemoUpsert(BaseModel):
+    body: str = Field(default="", max_length=2000)
+
+
+class MeetingMemoryMemoItem(BaseModel):
+    id: str
+    user_id: str
+    display_name: str
+    body: str
+    created_at: datetime
+    updated_at: datetime
+    is_me: bool = False
+
+
+class MeetingMemoryListItem(BaseModel):
+    appointment_id: str
+    room_id: str
+    room_name: str
+    room_type: str
+    title: str
+    confirmed_date: date
+    confirmed_time: time
+    place_id: str | None = None
+    place_name: str | None = None
+    my_memo_preview: str | None = None
+    my_memo_updated_at: datetime | None = None
+    memo_count: int = 0

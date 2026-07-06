@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Navbar } from "@/components/Navbar";
 import { TrustBadge } from "@/components/ProfileBadgeBorder";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { api, RankingEntry } from "@/lib/api";
@@ -30,18 +29,10 @@ export default function RankingPage() {
   const rest = entries.slice(3);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-8">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <Trophy className="h-7 w-7 text-warm" />
-            신뢰도 랭킹
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            장소 추천으로 쌓은 신뢰도 순위 · 칭호는 획득 점수에 따라 달라집니다
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-4xl px-4 py-6">
+        <p className="mb-6 text-sm text-muted">
+          장소 추천으로 쌓은 신뢰도 순위 · 칭호는 획득 점수에 따라 달라집니다
+        </p>
 
         {loading ? (
           <p className="py-16 text-center text-muted">불러오는 중...</p>
@@ -142,7 +133,6 @@ export default function RankingPage() {
             </p>
           </>
         )}
-      </main>
     </div>
   );
 }

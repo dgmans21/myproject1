@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -57,13 +56,10 @@ export default function GroupsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">방</h1>
-            <p className="mt-1 text-muted">임시방 · 고정방 · 3개월 약속 없으면 보관</p>
+          <div className="sr-only">
+            <h1>방</h1>
           </div>
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
@@ -139,7 +135,6 @@ export default function GroupsPage() {
             ))
           )}
         </div>
-      </main>
 
       <GuestPromptModal
         open={guestPrompt}

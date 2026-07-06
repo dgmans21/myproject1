@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_supabase
-from app.routers import appointments, places, profiles, room_votes, rooms
+from app.routers import analytics, appointments, places, profiles, room_votes, rooms
 
 app = FastAPI(
     title="우리지금만나 API",
@@ -21,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(profiles.router, prefix="/api/v1")
+app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(rooms.router, prefix="/api/v1")
 app.include_router(room_votes.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")

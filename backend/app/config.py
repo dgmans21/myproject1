@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_jwt_secret: str = ""
     kakao_rest_api_key: str = ""
+    analytics_ip_salt: str = "dev-analytics-salt"
     cors_origins: str = "http://localhost:3000"
 
     @property
