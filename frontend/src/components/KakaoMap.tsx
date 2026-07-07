@@ -29,6 +29,7 @@ export function KakaoMap({
   onMarkerClick,
   useClusterer = true,
 }: KakaoMapProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const clustererRef = useRef<unknown>(null);
@@ -141,9 +142,29 @@ export function KakaoMap({
     }
   }, [ready, markers, selectedMarkerId, onMarkerClick, useClusterer]);
 
+  useEffect(() => {
+    if (!ready || !mapRef.current || !wrapperRef.current) return;
+
+    const map = mapRef.current as { relayout?: () => void };
+    const relayout = () => {
+      map.relayout?.();
+    };
+
+    relayout();
+
+    const observer = new ResizeObserver(() => {
+      relayout();
+    });
+    observer.observe(wrapperRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [ready]);
 
   return (
     <div
+      ref={wrapperRef}
       className={`relative w-full overflow-hidden rounded-2xl border border-border ${className}`}
       style={{ height }}
     >

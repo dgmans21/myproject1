@@ -7,6 +7,11 @@ import { TravelTimeNudge } from "@/components/TravelTimeNudge";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { api, Place, TIER_LABELS } from "@/lib/api";
+import {
+  placeVoteMapViewportHeight,
+  placeVoteSplitGridHeight,
+} from "@/lib/map-viewport-height";
+import { cn } from "@/lib/utils";
 import { MapPin } from "lucide-react";
 
 interface PlaceVotePanelProps {
@@ -15,6 +20,53 @@ interface PlaceVotePanelProps {
   selectedPlaceId: string | null;
   onSelectPlace: (placeId: string) => void;
   origin?: { lat: number; lng: number; name?: string };
+}
+
+function PlaceCandidateButton({
+  place,
+  active,
+  appointmentId,
+  origin,
+  onSelect,
+}: {
+  place: Place;
+  active: boolean;
+  appointmentId: string;
+  origin?: { lat: number; lng: number; name?: string };
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "rounded-2xl border p-4 text-left transition-all",
+        active
+          ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+          : "border-border bg-card hover:border-primary/30"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <Badge variant="tier" tier={place.tier}>
+          {TIER_LABELS[place.tier]}
+        </Badge>
+        {active && <span className="text-xs font-medium text-primary">선택됨</span>}
+      </div>
+      <p className="mt-2 font-semibold text-foreground">{place.name}</p>
+      <p className="text-xs text-muted">{place.address}</p>
+      <TravelTimeNudge
+        className="mt-2"
+        place={place}
+        origin={origin}
+        appointmentId={appointmentId}
+      />
+      <KakaoMapLinks
+        className="mt-2"
+        place={place}
+        origin={origin ? { ...origin, name: origin.name ?? "출발" } : undefined}
+      />
+    </button>
+  );
 }
 
 export function PlaceVotePanel({
@@ -50,62 +102,55 @@ export function PlaceVotePanel({
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardTitle className="text-base">장소 후보 지도</CardTitle>
-        <CardDescription className="mt-1">
-          후보 장소를 지도에서 확인하고, 이동 시간을 참고해 선택하세요
-        </CardDescription>
-        <div className="mt-4">
-          <KakaoMap
-            markers={markers}
-            selectedMarkerId={selectedPlaceId}
-            onMarkerClick={onSelectPlace}
-            height={360}
-            useClusterer={markers.length > 1}
-          />
-        </div>
-      </Card>
+  const candidateList = (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+      {places.map((place) => (
+        <PlaceCandidateButton
+          key={place.id}
+          place={place}
+          active={place.id === selectedPlaceId}
+          appointmentId={appointmentId}
+          origin={origin}
+          onSelect={() => onSelectPlace(place.id)}
+        />
+      ))}
+    </div>
+  );
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {places.map((place) => {
-          const active = place.id === selectedPlaceId;
-          return (
-            <button
-              key={place.id}
-              type="button"
-              onClick={() => onSelectPlace(place.id)}
-              className={`rounded-2xl border p-4 text-left transition-all ${
-                active
-                  ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                  : "border-border bg-card hover:border-primary/30"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <Badge variant="tier" tier={place.tier}>
-                  {TIER_LABELS[place.tier]}
-                </Badge>
-                {active && (
-                  <span className="text-xs font-medium text-primary">선택됨</span>
-                )}
-              </div>
-              <p className="mt-2 font-semibold text-foreground">{place.name}</p>
-              <p className="text-xs text-muted">{place.address}</p>
-              <TravelTimeNudge
-                className="mt-2"
-                place={place}
-                origin={origin}
-                appointmentId={appointmentId}
-              />
-              <KakaoMapLinks
-                className="mt-2"
-                place={place}
-                origin={origin ? { ...origin, name: origin.name ?? "출발" } : undefined}
-              />
-            </button>
-          );
-        })}
+  return (
+    <div
+      className="space-y-4"
+      style={
+        {
+          "--map-mobile-h": placeVoteMapViewportHeight(),
+          "--map-split-h": placeVoteSplitGridHeight(),
+        } as React.CSSProperties
+      }
+    >
+      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:space-y-0">
+        <Card className="flex min-h-0 flex-col lg:h-[var(--map-split-h)]">
+          <CardTitle className="text-base">장소 후보 지도</CardTitle>
+          <CardDescription className="mt-1">
+            후보 장소를 지도에서 확인하고, 이동 시간을 참고해 선택하세요
+          </CardDescription>
+          <div className="mt-4 min-h-0 flex-1 h-[var(--map-mobile-h)] lg:h-auto">
+            <KakaoMap
+              markers={markers}
+              selectedMarkerId={selectedPlaceId}
+              onMarkerClick={onSelectPlace}
+              height="100%"
+              className="h-full min-h-0"
+              useClusterer={markers.length > 1}
+            />
+          </div>
+        </Card>
+
+        <div className="min-h-0 lg:flex lg:h-[var(--map-split-h)] lg:flex-col lg:overflow-y-auto lg:pr-1">
+          <p className="mb-2 hidden text-sm font-semibold text-foreground lg:block">
+            장소 후보
+          </p>
+          {candidateList}
+        </div>
       </div>
 
       {selected && (
