@@ -1,7 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Calendar, Clock, MapPin, Users, Vote, ArrowRight } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { Button } from "@/components/ui/Button";
+
+const FEATURE_IMAGES = [
+  "/images/vote.png",
+  "/images/clockmap.png",
+  "/images/mapinrating.png",
+  "/images/users.png",
+] as const;
 
 const features = [
   {
@@ -81,19 +89,49 @@ export default function HomePage() {
             <p className="mt-2 text-muted">약속 잡기의 모든 과정을 더 스마트하게</p>
           </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2">
-            {features.map(({ icon: Icon, title, description, color }) => (
+          {features.map(({ icon: Icon, title, description, color }, index) => (
+            <div
+              key={title}
+              className="grid gap-8 py-20 lg:grid-cols-2 lg:items-center lg:gap-12"
+            >
               <div
-                key={title}
-                className="gradient-card rounded-2xl border border-border p-6 shadow-sm transition-shadow hover:shadow-md"
+                className={`order-1 ${index % 2 === 0 ? "lg:order-2" : "lg:order-1"}`}
               >
-                <div className={`inline-flex rounded-xl p-3 ${color}`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{description}</p>
+                <Image
+                  src={FEATURE_IMAGES[index]}
+                  alt={title}
+                  width={960}
+                  height={540}
+                  className="max-w-full h-auto w-full rounded-2xl"
+                />
               </div>
-            ))}
+              <div
+                className={`order-2 ${index % 2 === 0 ? "lg:order-1" : "lg:order-2"}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`inline-flex shrink-0 rounded-xl p-2.5 ${color}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-foreground lg:text-2xl">
+                      {title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-relaxed text-muted lg:text-base">
+                      {description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex justify-center pb-4 pt-4">
+            <Link href="#auth">
+              <Button size="lg">
+                시작하기
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

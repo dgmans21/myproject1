@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { AppIconRail } from "@/components/layout/AppIconRail";
 import { AppNavPanel } from "@/components/layout/AppNavPanel";
 import { AppContentHeader } from "@/components/layout/AppContentHeader";
 import { AppMobileDrawer } from "@/components/layout/AppMobileDrawer";
 import { api } from "@/lib/api";
 import { isAdmin } from "@/lib/permissions";
+import { useAuthSession } from "@/lib/use-auth-session";
 
 const NAV_COLLAPSED_KEY = "app-nav-panel-collapsed";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { isLoading, isGuest, isLoggedIn, needsLogin, login, logout } = useAuthSession();
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
@@ -27,11 +28,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isLoading || needsLogin) {
+      setUserIsAdmin(false);
+      return;
+    }
     api.profiles
       .me()
       .then((p) => setUserIsAdmin(isAdmin(p)))
       .catch(() => setUserIsAdmin(false));
-  }, []);
+  }, [isLoading, needsLogin]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -49,13 +54,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const handleLogout = () => {
-    router.push("/");
-  };
-
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">
-      <AppIconRail onLogout={handleLogout} className="hidden md:flex" />
+      <AppIconRail
+        isGuest={isGuest}
+        isLoggedIn={isLoggedIn}
+        profileLocked={needsLogin}
+        onLogin={login}
+        onLogout={logout}
+        className="hidden md:flex"
+      />
 
       <AppNavPanel
         collapsed={navCollapsed}
@@ -77,7 +85,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         isAdmin={userIsAdmin}
-        onLogout={handleLogout}
+        isGuest={isGuest}
+        isLoggedIn={isLoggedIn}
+        profileLocked={needsLogin}
+        onLogin={login}
+        onLogout={logout}
       />
     </div>
   );

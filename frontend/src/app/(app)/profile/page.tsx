@@ -15,9 +15,39 @@ import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { MBTI_OPTIONS } from "@/lib/mbti";
 import { isAdmin } from "@/lib/permissions";
 import { PROFILE_STATUS_MAX_LENGTH } from "@/lib/profile-status";
+import { useAuthSession } from "@/lib/use-auth-session";
 import Link from "next/link";
+import { Lock, LogIn } from "lucide-react";
 
-export default function ProfilePage() {
+function ProfileGuestGate({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="mx-auto w-full max-w-lg px-4 py-16">
+      <Card className="text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Lock className="h-7 w-7" />
+        </div>
+        <CardTitle className="mt-6 text-lg">로그인 후 이용 가능합니다</CardTitle>
+        <CardDescription className="mt-3 leading-relaxed">
+          마이페이지는 회원만 이용할 수 있어요. 방·맛집 둘러보기는 그대로 가능하고, 프로필·칭호·
+          잔디 관리는 로그인 후에 이어서 하실 수 있습니다.
+        </CardDescription>
+        <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-border"
+          >
+            대시보드로
+          </Link>
+          <Button onClick={onLogin}>
+            <LogIn className="h-4 w-4" /> 로그인 · 가입하기
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ProfileMemberContent() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tab, setTab] = useState<"info" | "decor" | "interests" | "trust" | "social">("info");
   const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
@@ -347,4 +377,20 @@ export default function ProfilePage() {
         )}
     </div>
   );
+}
+
+export default function ProfilePage() {
+  const { isLoading, needsLogin, login } = useAuthSession();
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 text-center text-muted">불러오는 중...</div>
+    );
+  }
+
+  if (needsLogin) {
+    return <ProfileGuestGate onLogin={login} />;
+  }
+
+  return <ProfileMemberContent />;
 }

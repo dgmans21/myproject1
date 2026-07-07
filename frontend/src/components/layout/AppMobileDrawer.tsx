@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { X } from "lucide-react";
+import { Lock, LogIn, LogOut, UserCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_ICON_NAV, getNavSection } from "@/lib/app-nav-config";
 import {
@@ -10,19 +10,32 @@ import {
   Users,
   MapPin,
   Trophy,
-  UserCircle,
 } from "lucide-react";
 
 const ICONS = [Sparkles, Users, MapPin, Trophy, UserCircle] as const;
+const PROFILE_HREF = "/profile";
 
 type AppMobileDrawerProps = {
   open: boolean;
   onClose: () => void;
   isAdmin?: boolean;
-  onLogout: () => void;
+  isGuest: boolean;
+  isLoggedIn: boolean;
+  profileLocked: boolean;
+  onLogin: () => void;
+  onLogout: () => void | Promise<void>;
 };
 
-export function AppMobileDrawer({ open, onClose, isAdmin = false, onLogout }: AppMobileDrawerProps) {
+export function AppMobileDrawer({
+  open,
+  onClose,
+  isAdmin = false,
+  isGuest,
+  isLoggedIn,
+  profileLocked,
+  onLogin,
+  onLogout,
+}: AppMobileDrawerProps) {
   const pathname = usePathname();
   const section = getNavSection(pathname, isAdmin);
 
@@ -39,13 +52,21 @@ export function AppMobileDrawer({ open, onClose, isAdmin = false, onLogout }: Ap
       <div className="absolute inset-y-0 left-0 flex w-[min(100%,280px)] bg-sidebar shadow-xl">
         <div className="flex w-[72px] shrink-0 flex-col items-center border-r border-border py-3">
           {APP_ICON_NAV.map((item, idx) => {
-            const Icon = ICONS[idx];
-            const active = pathname.startsWith(item.href) || (item.href === "/dashboard" && pathname === "/dashboard");
+            const Icon =
+              item.href === PROFILE_HREF && profileLocked ? Lock : ICONS[idx];
+            const active =
+              pathname.startsWith(item.href) ||
+              (item.href === "/dashboard" && pathname === "/dashboard");
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
+                title={
+                  item.href === PROFILE_HREF && profileLocked
+                    ? `${item.label} (로그인 후 이용)`
+                    : item.label
+                }
                 className={cn(
                   "mb-2 flex h-11 w-11 items-center justify-center rounded-xl",
                   active ? "bg-primary text-white" : "text-muted"
@@ -74,8 +95,11 @@ export function AppMobileDrawer({ open, onClose, isAdmin = false, onLogout }: Ap
                   <Link
                     href={link.href}
                     onClick={onClose}
-                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-sidebar-hover"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-sidebar-hover"
                   >
+                    {link.href === PROFILE_HREF && profileLocked && (
+                      <Lock className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    )}
                     {link.label}
                   </Link>
                 </li>
@@ -83,16 +107,31 @@ export function AppMobileDrawer({ open, onClose, isAdmin = false, onLogout }: Ap
             </ul>
           </nav>
           <div className="border-t border-border p-3">
-            <button
-              type="button"
-              onClick={() => {
-                onLogout();
-                onClose();
-              }}
-              className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover"
-            >
-              로그아웃
-            </button>
+            {isLoggedIn && !isGuest ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void onLogout();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover"
+              >
+                <LogOut className="h-4 w-4" />
+                로그아웃
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  onLogin();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-primary hover:bg-primary/10"
+              >
+                <LogIn className="h-4 w-4" />
+                로그인 · 가입하기
+              </button>
+            )}
           </div>
         </div>
       </div>
