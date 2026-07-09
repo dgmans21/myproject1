@@ -7,6 +7,11 @@ import {
   loadKakaoMapSdk,
 } from "@/lib/kakao-map";
 
+export interface KakaoMapHandle {
+  getCenter: () => { lat: number; lng: number } | null;
+  getLevel: () => number | null;
+}
+
 interface KakaoMapProps {
   markers?: KakaoMapMarker[];
   center?: { lat: number; lng: number };
@@ -17,6 +22,13 @@ interface KakaoMapProps {
   onMarkerClick?: (id: string) => void;
   /** 다중 마커일 때 clusterer 라이브러리 사용 (공식 가이드) */
   useClusterer?: boolean;
+  /** false면 마커 기준 bounds 자동 맞춤 비활성 (검색 모드) */
+  fitBounds?: boolean;
+  /** false면 선택 마커 시 center 이동 안 함 */
+  recenterOnSelect?: boolean;
+  mapHandleRef?: React.MutableRefObject<KakaoMapHandle | null>;
+  overlay?: React.ReactNode;
+  onCenterChanged?: (center: { lat: number; lng: number }) => void;
 }
 
 export function KakaoMap({
@@ -28,14 +40,24 @@ export function KakaoMap({
   selectedMarkerId,
   onMarkerClick,
   useClusterer = true,
+  fitBounds = true,
+  recenterOnSelect = true,
+  mapHandleRef,
+  overlay,
+  onCenterChanged,
 }: KakaoMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const clustererRef = useRef<unknown>(null);
   const markerInstancesRef = useRef<unknown[]>([]);
+  const initialLevelRef = useRef(level);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    initialLevelRef.current = level;
+  }, [level]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +75,7 @@ export function KakaoMap({
 
         const map = new kakao.Map(containerRef.current, {
           center: mapCenter,
-          level,
+          level: initialLevelRef.current,
         });
         mapRef.current = map;
         setReady(true);
@@ -74,8 +96,20 @@ export function KakaoMap({
         clustererRef.current = null;
       }
       mapRef.current = null;
+      if (mapHandleRef) mapHandleRef.current = null;
     };
-  }, [center?.lat, center?.lng, level]);
+  }, [mapHandleRef]);
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.kakao || !center) return;
+    const kakao = window.kakao.maps;
+    const map = mapRef.current as {
+      setCenter: (c: unknown) => void;
+      setLevel: (l: number) => void;
+    };
+    map.setCenter(new kakao.LatLng(center.lat, center.lng));
+    if (level != null) map.setLevel(level);
+  }, [ready, center?.lat, center?.lng, level]);
 
   useEffect(() => {
     if (!ready || !mapRef.current || !window.kakao) return;
@@ -127,11 +161,13 @@ export function KakaoMap({
       });
     }
 
-    const bounds = new kakao.LatLngBounds();
-    markers.forEach((m) => bounds.extend(new kakao.LatLng(m.lat, m.lng)));
-    (map as { setBounds: (b: unknown) => void }).setBounds(bounds);
+    if (fitBounds) {
+      const bounds = new kakao.LatLngBounds();
+      markers.forEach((m) => bounds.extend(new kakao.LatLng(m.lat, m.lng)));
+      (map as { setBounds: (b: unknown) => void }).setBounds(bounds);
+    }
 
-    if (selectedMarkerId) {
+    if (recenterOnSelect && selectedMarkerId) {
       const selected = markers.find((m) => m.id === selectedMarkerId);
       if (selected) {
         (map as { setCenter: (c: unknown) => void; setLevel: (l: number) => void }).setCenter(
@@ -140,7 +176,67 @@ export function KakaoMap({
         (map as { setLevel: (l: number) => void }).setLevel(3);
       }
     }
-  }, [ready, markers, selectedMarkerId, onMarkerClick, useClusterer]);
+  }, [
+    ready,
+    markers,
+    selectedMarkerId,
+    onMarkerClick,
+    useClusterer,
+    fitBounds,
+    recenterOnSelect,
+  ]);
+
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+
+    const map = mapRef.current as {
+      relayout?: () => void;
+      getCenter: () => { getLat: () => number; getLng: () => number };
+      getLevel: () => number;
+    };
+
+    if (mapHandleRef) {
+      mapHandleRef.current = {
+        getCenter: () => {
+          const c = map.getCenter();
+          return { lat: c.getLat(), lng: c.getLng() };
+        },
+        getLevel: () => map.getLevel(),
+      };
+    }
+  }, [ready, mapHandleRef]);
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.kakao || !onCenterChanged) return;
+
+    const map = mapRef.current as {
+      getCenter: () => { getLat: () => number; getLng: () => number };
+    };
+    const kakao = window.kakao.maps;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const emitCenter = () => {
+      const c = map.getCenter();
+      onCenterChanged({ lat: c.getLat(), lng: c.getLng() });
+    };
+
+    const scheduleEmit = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(emitCenter, 200);
+    };
+
+    kakao.event.addListener(map, "center_changed", scheduleEmit);
+    kakao.event.addListener(map, "zoom_changed", scheduleEmit);
+
+    emitCenter();
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      kakao.event.removeListener(map, "center_changed", scheduleEmit);
+      kakao.event.removeListener(map, "zoom_changed", scheduleEmit);
+    };
+  }, [ready, onCenterChanged]);
 
   useEffect(() => {
     if (!ready || !mapRef.current || !wrapperRef.current) return;
@@ -174,6 +270,8 @@ export function KakaoMap({
         aria-label="Kakao 지도"
         aria-busy={!ready && !error}
       />
+
+      {overlay}
 
       {!ready && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface text-sm text-muted">

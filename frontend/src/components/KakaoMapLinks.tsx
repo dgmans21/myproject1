@@ -1,3 +1,5 @@
+"use client";
+
 import {
   kakaoDirectionsByCarUrl,
   kakaoDirectionsToUrl,
@@ -5,21 +7,31 @@ import {
   kakaoMapViewUrl,
   type KakaoLatLng,
 } from "@/lib/kakao-map";
+import {
+  resolveTravelOrigin,
+  useDepartureOriginOptional,
+} from "@/lib/departure-origin-context";
 
 interface KakaoMapLinksProps {
   place: KakaoLatLng & { kakao_place_id?: string };
-  /** 출발지(집 등) — 있으면 자동차 길찾기 링크 추가 */
+  /** 출발지 — 없으면 Context 활성 출발지 사용 */
   origin?: KakaoLatLng;
   className?: string;
 }
 
 export function KakaoMapLinks({ place, origin, className = "" }: KakaoMapLinksProps) {
+  const ctx = useDepartureOriginOptional();
+  const resolved = resolveTravelOrigin(origin, ctx);
+
   const mapUrl = place.kakao_place_id
     ? kakaoMapViewByPlaceId(place.kakao_place_id)
     : kakaoMapViewUrl(place);
 
-  const directionsUrl = origin
-    ? kakaoDirectionsByCarUrl(origin, place)
+  const directionsUrl = resolved
+    ? kakaoDirectionsByCarUrl(
+        { ...resolved, name: resolved.name ?? "출발" },
+        place
+      )
     : kakaoDirectionsToUrl(place);
 
   return (

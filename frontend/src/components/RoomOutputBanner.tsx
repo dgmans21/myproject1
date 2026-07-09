@@ -18,15 +18,6 @@ export function RoomOutputBanner({ roomId, appointments }: RoomOutputBannerProps
 
   const [place, setPlace] = useState<Place | null>(null);
   const [settlement, setSettlement] = useState<MeetingSettlement | null>(null);
-  const [origin, setOrigin] = useState<{ lat: number; lng: number; name?: string } | undefined>();
-
-  useEffect(() => {
-    api.profiles.me().then((p) => {
-      if (p.home_lat != null && p.home_lng != null) {
-        setOrigin({ lat: p.home_lat, lng: p.home_lng, name: p.display_name });
-      }
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!confirmed) return;
@@ -53,7 +44,6 @@ export function RoomOutputBanner({ roomId, appointments }: RoomOutputBannerProps
         appointment={confirmed}
         place={place}
         settlement={settlement}
-        origin={origin}
       />
     </div>
   );

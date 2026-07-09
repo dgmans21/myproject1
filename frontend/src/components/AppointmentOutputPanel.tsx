@@ -1,5 +1,6 @@
 "use client";
 
+import { DepartureOriginChip } from "@/components/DepartureOriginPicker";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { MeetingSettlementWidget } from "@/components/MeetingSettlementWidget";
@@ -15,7 +16,6 @@ interface AppointmentOutputPanelProps {
   appointment: Appointment;
   place: Place | null;
   settlement: MeetingSettlement | null;
-  origin?: { lat: number; lng: number; name?: string };
 }
 
 /** 약속 확정 후 출력: 일정 · 지도 · 이동시간 · 모임 결산 */
@@ -23,7 +23,6 @@ export function AppointmentOutputPanel({
   appointment,
   place,
   settlement,
-  origin,
 }: AppointmentOutputPanelProps) {
   return (
     <div className="space-y-4">
@@ -56,17 +55,13 @@ export function AppointmentOutputPanel({
             <span className="font-semibold text-foreground">{place.name}</span>
           </div>
           <p className="mt-1 text-sm text-muted">{place.address}</p>
+          <DepartureOriginChip className="mt-3" />
           <TravelTimeNudge
-            className="mt-3"
-            place={place}
-            origin={origin}
-            appointmentId={appointment.id}
-          />
-          <KakaoMapLinks
             className="mt-2"
             place={place}
-            origin={origin ? { ...origin, name: origin.name ?? "출발" } : undefined}
+            appointmentId={appointment.id}
           />
+          <KakaoMapLinks className="mt-2" place={place} />
           <div className="mt-4">
             <KakaoMap
               markers={[{ id: place.id, name: place.name, lat: place.lat, lng: place.lng }]}

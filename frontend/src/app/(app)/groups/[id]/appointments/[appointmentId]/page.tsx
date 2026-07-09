@@ -33,7 +33,6 @@ export default function AppointmentPage() {
   const [timeSummary, setTimeSummary] = useState<TimeSlotSummary[]>([]);
   const [confirmedPlace, setConfirmedPlace] = useState<Place | null>(null);
   const [settlement, setSettlement] = useState<MeetingSettlement | null>(null);
-  const [origin, setOrigin] = useState<{ lat: number; lng: number; name?: string } | undefined>();
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [selectedSlots, setSelectedSlots] = useState<Map<string, number>>(new Map());
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
@@ -65,18 +64,6 @@ export default function AppointmentPage() {
       }
     } catch { /* mock fallback */ }
   };
-
-  useEffect(() => {
-    api.profiles.me().then((p) => {
-      if (p.home_lat != null && p.home_lng != null) {
-        setOrigin({ lat: p.home_lat, lng: p.home_lng, name: p.display_name });
-      } else {
-        setOrigin({ lat: 37.4979, lng: 127.0276, name: p.display_name });
-      }
-    }).catch(() => {
-      setOrigin({ lat: 37.4979, lng: 127.0276, name: "출발" });
-    });
-  }, []);
 
   useEffect(() => { load(); }, [appointmentId]);
 
@@ -285,7 +272,6 @@ export default function AppointmentPage() {
                 appointmentId={appointment.id}
                 selectedPlaceId={selectedPlaceId}
                 onSelectPlace={setSelectedPlaceId}
-                origin={origin}
               />
             </section>
 

@@ -120,3 +120,150 @@ export async function geocodeAddress(address: string): Promise<KakaoLatLng | nul
 }
 
 export const DEFAULT_MAP_CENTER = { lat: 37.5665, lng: 126.978 };
+
+export interface KakaoPoiResult {
+  id: string;
+  name: string;
+  address: string;
+  roadAddress?: string;
+  lat: number;
+  lng: number;
+  distanceMeters?: number;
+}
+
+export interface KeywordSearchPage {
+  pois: KakaoPoiResult[];
+  currentPage: number;
+  isLast: boolean;
+  hasNextPage: boolean;
+}
+
+export interface KeywordSearchOptions {
+  center?: KakaoLatLng;
+  page?: number;
+  radius?: number;
+}
+
+function mapPoiRow(row: {
+  id: string;
+  place_name: string;
+  address_name: string;
+  road_address_name?: string;
+  x: string;
+  y: string;
+  distance?: string;
+}): KakaoPoiResult {
+  return {
+    id: row.id,
+    name: row.place_name,
+    address: row.road_address_name || row.address_name,
+    roadAddress: row.road_address_name || undefined,
+    lat: parseFloat(row.y),
+    lng: parseFloat(row.x),
+    distanceMeters: row.distance ? parseInt(row.distance, 10) : undefined,
+  };
+}
+
+/** services.Places — 키워드/상호/권역 POI 검색 */
+export async function keywordSearch(
+  query: string,
+  options?: KeywordSearchOptions
+): Promise<KeywordSearchPage> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { pois: [], currentPage: 1, isLast: true, hasNextPage: false };
+  }
+
+  await loadKakaoMapSdk();
+  const page = options?.page ?? 1;
+
+  return new Promise((resolve, reject) => {
+    const places = new window.kakao!.maps.services.Places();
+    const searchOptions: { location?: unknown; radius?: number; sort?: string } = {
+      sort: options?.center ? "distance" : undefined,
+    };
+    if (options?.center) {
+      searchOptions.location = new window.kakao!.maps.LatLng(
+        options.center.lat,
+        options.center.lng
+      );
+      searchOptions.radius = options.radius ?? 20000;
+    }
+
+    const runSearch = (targetPage: number) => {
+      places.keywordSearch(
+        trimmed,
+        (data, status, pagination) => {
+          const ok = status === window.kakao!.maps.services.Status.OK;
+          const zero = status === window.kakao!.maps.services.Status.ZERO_RESULT;
+
+          if (!ok && !zero) {
+            reject(new Error("장소 검색에 실패했습니다. 잠시 후 다시 시도해 주세요."));
+            return;
+          }
+
+          if (targetPage !== pagination.current) {
+            if (pagination.hasNextPage) {
+              pagination.gotoPage(targetPage);
+            } else {
+              resolve({
+                pois: [],
+                currentPage: targetPage,
+                isLast: true,
+                hasNextPage: false,
+              });
+            }
+            return;
+          }
+
+          const pois = (data ?? []).map(mapPoiRow);
+          resolve({
+            pois,
+            currentPage: pagination.current,
+            isLast: pagination.current >= pagination.last,
+            hasNextPage: pagination.hasNextPage,
+          });
+        },
+        searchOptions
+      );
+    };
+
+    if (page === 1) {
+      runSearch(1);
+    } else {
+      runSearch(page);
+    }
+  });
+}
+
+/** 주소에서 공개 거주지(시/구) 추출 */
+export function deriveResidenceFromAddress(address: string): string {
+  const trimmed = address.trim();
+  if (!trimmed) return "";
+
+  const metro = trimmed.match(
+    /^(서울|부산|대구|인천|광주|대전|울산|세종|제주)(?:특별시|광역시|특별자치시|특별자치도)?\s*([^\s]+(?:구|군))/
+  );
+  if (metro) {
+    const city = metro[1] === "세종" ? "세종" : metro[1];
+    return `${city} ${metro[2]}`;
+  }
+
+  const province = trimmed.match(/^([가-힣]+도)\s+([^\s]+(?:시|군))/);
+  if (province) return `${province[1]} ${province[2]}`;
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]} ${parts[1]}`;
+  return trimmed.slice(0, 40);
+}
+
+export const POI_MARKER_PREFIX = "kakao-poi:";
+export function poiMarkerId(kakaoPlaceId: string): string {
+  return `${POI_MARKER_PREFIX}${kakaoPlaceId}`;
+}
+export function isPoiMarkerId(id: string): boolean {
+  return id.startsWith(POI_MARKER_PREFIX);
+}
+export function kakaoPlaceIdFromMarkerId(id: string): string {
+  return id.slice(POI_MARKER_PREFIX.length);
+}

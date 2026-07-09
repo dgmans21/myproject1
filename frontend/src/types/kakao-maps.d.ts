@@ -10,8 +10,11 @@ declare global {
           options: { center: unknown; level: number }
         ) => {
           setCenter: (latlng: unknown) => void;
+          getCenter: () => { getLat: () => number; getLng: () => number };
           setBounds: (bounds: unknown) => void;
           setLevel: (level: number) => void;
+          getLevel: () => number;
+          relayout?: () => void;
         };
         LatLng: new (lat: number, lng: number) => unknown;
         LatLngBounds: new () => {
@@ -40,6 +43,7 @@ declare global {
             type: string,
             handler: () => void
           ) => void;
+          removeListener: (target: unknown, type: string, handler: () => void) => void;
         };
         services: {
           Geocoder: new () => {
@@ -51,8 +55,34 @@ declare global {
               ) => void
             ) => void;
           };
+          Places: new () => {
+            keywordSearch: (
+              keyword: string,
+              callback: (
+                data: Array<{
+                  id: string;
+                  place_name: string;
+                  address_name: string;
+                  road_address_name?: string;
+                  x: string;
+                  y: string;
+                  distance?: string;
+                }>,
+                status: string,
+                pagination: {
+                  current: number;
+                  last: number;
+                  hasNextPage: boolean;
+                  gotoPage: (page: number) => void;
+                }
+              ) => void,
+              options?: { location?: unknown; radius?: number; sort?: string }
+            ) => void;
+          };
           Status: {
             OK: string;
+            ZERO_RESULT: string;
+            ERROR: string;
           };
         };
       };

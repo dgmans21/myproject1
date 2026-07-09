@@ -14,6 +14,7 @@ import type {
   Room,
   RoomCreate,
   RoomMember,
+  SavedLocation,
 } from "@/lib/api";
 
 type MockApi = {
@@ -25,6 +26,29 @@ type MockApi = {
     update: (data: Partial<Profile>) => Promise<Profile>;
     attendanceHeatmap: () => Promise<{ date: string; count: number }[]>;
     verifySecurity: (pin: string) => Promise<{ verified: boolean }>;
+  };
+  savedLocations: {
+    list: () => Promise<SavedLocation[]>;
+    create: (data: {
+      label: string;
+      description?: string;
+      address: string;
+      lat: number;
+      lng: number;
+      is_default?: boolean;
+    }) => Promise<SavedLocation>;
+    update: (
+      id: string,
+      data: Partial<{
+        label: string;
+        description?: string;
+        address: string;
+        lat: number;
+        lng: number;
+        is_default: boolean;
+      }>
+    ) => Promise<SavedLocation>;
+    delete: (id: string) => Promise<{ ok: boolean }>;
   };
   rooms: {
     list: () => Promise<Room[]>;
@@ -54,6 +78,7 @@ type MockApi = {
     ) => Promise<{ ok: boolean }>;
     listReviews: (placeId: string) => Promise<unknown>;
     deleteReview: (placeId: string, userId: string) => Promise<{ ok: boolean }>;
+    delete: (id: string) => Promise<{ ok: boolean }>;
     voteRecommendation: (
       id: string,
       vote: "RECOMMEND" | "NOT_RECOMMEND"
@@ -170,6 +195,7 @@ function mapPlace(raw: Place): Place {
     id: String(raw.id),
     avg_rating: Number(raw.avg_rating ?? 0),
     rating_count: Number(raw.rating_count ?? 0),
+    is_mine: Boolean(raw.is_mine),
   };
 }
 
@@ -231,6 +257,40 @@ export function applyHybridOverrides<T extends MockApi>(mock: T): T {
           date: String(row.date),
           count: Number(row.count),
         }));
+      },
+    },
+    savedLocations: {
+      ...mock.savedLocations,
+      list: async () => {
+        if (!(await useHttp())) return mock.savedLocations.list();
+        const rows = await apiFetch<SavedLocation[]>("/saved-locations");
+        return rows.map((row) => ({
+          ...row,
+          id: String(row.id),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
+        }));
+      },
+      create: async (data) => {
+        if (!(await useHttp())) return mock.savedLocations.create(data);
+        const raw = await apiFetch<SavedLocation>("/saved-locations", {
+          method: "POST",
+          body: JSON.stringify(data),
+        });
+        return { ...raw, id: String(raw.id) };
+      },
+      update: async (id, data) => {
+        if (!(await useHttp())) return mock.savedLocations.update(id, data);
+        const raw = await apiFetch<SavedLocation>(`/saved-locations/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(data),
+        });
+        return { ...raw, id: String(raw.id) };
+      },
+      delete: async (id) => {
+        if (!(await useHttp())) return mock.savedLocations.delete(id);
+        await apiFetch(`/saved-locations/${id}`, { method: "DELETE" });
+        return { ok: true };
       },
     },
     rooms: {
@@ -337,6 +397,11 @@ export function applyHybridOverrides<T extends MockApi>(mock: T): T {
       deleteReview: async (placeId: string, userId: string) => {
         if (!(await useHttp())) return mock.places.deleteReview(placeId, userId);
         await apiFetch(`/places/${placeId}/reviews/${userId}`, { method: "DELETE" });
+        return { ok: true };
+      },
+      delete: async (id: string) => {
+        if (!(await useHttp())) return mock.places.delete(id);
+        await apiFetch(`/places/${id}`, { method: "DELETE" });
         return { ok: true };
       },
       voteRecommendation: async (id: string, vote: "RECOMMEND" | "NOT_RECOMMEND") => {

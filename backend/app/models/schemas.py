@@ -105,6 +105,35 @@ class ProfileUpdate(BaseModel):
     profile_decor: ProfileDecorFields | None = None
 
 
+class SavedLocationCreate(BaseModel):
+    label: str
+    description: str | None = Field(default=None, max_length=10)
+    address: str
+    lat: float
+    lng: float
+    is_default: bool = False
+
+
+class SavedLocationUpdate(BaseModel):
+    label: str | None = None
+    description: str | None = Field(default=None, max_length=10)
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    is_default: bool | None = None
+
+
+class SavedLocationResponse(BaseModel):
+    id: UUID
+    label: str
+    description: str | None = None
+    address: str
+    lat: float
+    lng: float
+    is_default: bool
+    created_at: datetime | None = None
+
+
 class RecommenderTitle(BaseModel):
     id: int
     title: str
@@ -333,6 +362,7 @@ class PlaceResponse(BaseModel):
     recommender_title: str | None = None
     past_travel_hint: str | None = None
     top_ranker_endorsement: TopRankerPlaceEndorsement | None = None
+    is_mine: bool = False
 
 
 class PlaceRatingCreate(BaseModel):

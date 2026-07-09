@@ -19,6 +19,7 @@ from app.models.schemas import (
 )
 from app.services.profile_decor import merge_profile_decor, normalize_status_message
 from app.services.rating import get_user_rating_quota
+from app.services.residence import derive_residence_from_address
 from app.services.social_points import calc_social_title_for_points, validate_mbti_types
 from app.services.trust import calc_badge_tier, calc_title_for_score
 
@@ -173,6 +174,14 @@ async def update_my_profile(
         if not residence:
             raise HTTPException(status_code=400, detail="거주지를 입력해 주세요")
         update_data["residence"] = residence
+
+    if "home_address" in update_data:
+        home_address = (update_data["home_address"] or "").strip()
+        update_data["home_address"] = home_address or None
+        if home_address:
+            derived = derive_residence_from_address(home_address)
+            if derived:
+                update_data["residence"] = derived
 
     if "profile_decor" in update_data:
         decor_patch = update_data.pop("profile_decor")

@@ -193,6 +193,7 @@ async def list_places(
                 recommender_title=title,
                 past_travel_hint=_past_travel_hint(sb, user_id, p["id"]),
                 top_ranker_endorsement=endorsement,
+                is_mine=p.get("recommended_by") == user_id,
             )
         )
     return items
@@ -216,7 +217,35 @@ async def create_place(body: PlaceCreate, user_id: str = Depends(get_current_use
         .execute()
     )
     p = result.data[0]
-    return PlaceResponse(**p, avg_rating=0, rating_count=0)
+    return PlaceResponse(
+        id=p["id"],
+        name=p["name"],
+        address=p["address"],
+        lat=p["lat"],
+        lng=p["lng"],
+        category=p.get("category"),
+        tier=p["tier"],
+        avg_rating=float(p.get("avg_rating", 0)),
+        rating_count=int(p.get("rating_count", 0)),
+        is_mine=True,
+    )
+
+
+@router.delete("/{place_id}", status_code=204)
+async def delete_place(place_id: UUID, user_id: str = Depends(get_current_user_id)):
+    """등록자 또는 ADMIN만 장소 삭제 가능"""
+    sb = get_supabase()
+    place_key = str(place_id)
+    place = sb.table("places").select("recommended_by").eq("id", place_key).single().execute()
+    if not place.data:
+        raise HTTPException(status_code=404, detail="장소를 찾을 수 없습니다")
+
+    recommended_by = place.data.get("recommended_by")
+    if recommended_by != user_id and not _is_admin(sb, user_id):
+        raise HTTPException(status_code=403, detail="등록한 사용자만 삭제할 수 있습니다")
+
+    sb.table("places").delete().eq("id", place_key).execute()
+    return None
 
 
 @router.post("/{place_id}/ratings", status_code=201)

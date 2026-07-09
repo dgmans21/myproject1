@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { api, Place, TravelTimeResponse } from "@/lib/api";
+import {
+  resolveTravelOrigin,
+  useDepartureOriginOptional,
+} from "@/lib/departure-origin-context";
 
 interface TravelTimeNudgeProps {
   place: Place;
-  /** 출발지(집) — 있으면 Kakao Mobility 기준 예상 시간도 조회 */
+  /** 출발지 — 없으면 Context 활성 출발지 사용 */
   origin?: { lat: number; lng: number };
   appointmentId?: string;
   className?: string;
@@ -18,14 +22,16 @@ export function TravelTimeNudge({
   appointmentId,
   className = "",
 }: TravelTimeNudgeProps) {
+  const ctx = useDepartureOriginOptional();
+  const resolved = resolveTravelOrigin(origin, ctx);
   const [live, setLive] = useState<TravelTimeResponse | null>(null);
 
   useEffect(() => {
-    if (!origin) return;
+    if (!resolved) return;
     api.places
       .travelTime({
-        origin_lat: origin.lat,
-        origin_lng: origin.lng,
+        origin_lat: resolved.lat,
+        origin_lng: resolved.lng,
         dest_lat: place.lat,
         dest_lng: place.lng,
         place_id: place.id,
@@ -33,7 +39,7 @@ export function TravelTimeNudge({
       })
       .then(setLive)
       .catch(() => {});
-  }, [place.id, place.lat, place.lng, origin?.lat, origin?.lng, appointmentId]);
+  }, [place.id, place.lat, place.lng, resolved?.lat, resolved?.lng, appointmentId]);
 
   return (
     <div className={`space-y-1 text-xs ${className}`}>
@@ -48,7 +54,7 @@ export function TravelTimeNudge({
           출발지 기준 예상 · {live.route_summary}
         </p>
       )}
-      {!place.past_travel_hint && !live && origin && (
+      {!place.past_travel_hint && !live && resolved && (
         <p className="text-muted">이동 시간 계산 중...</p>
       )}
     </div>

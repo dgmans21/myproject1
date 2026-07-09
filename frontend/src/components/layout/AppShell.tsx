@@ -6,6 +6,10 @@ import { AppIconRail } from "@/components/layout/AppIconRail";
 import { AppNavPanel } from "@/components/layout/AppNavPanel";
 import { AppContentHeader } from "@/components/layout/AppContentHeader";
 import { AppMobileDrawer } from "@/components/layout/AppMobileDrawer";
+import {
+  DepartureOriginPickerModal,
+} from "@/components/DepartureOriginPicker";
+import { DepartureOriginProvider } from "@/lib/departure-origin-context";
 import { api } from "@/lib/api";
 import { isAdmin } from "@/lib/permissions";
 import { useAuthSession } from "@/lib/use-auth-session";
@@ -55,7 +59,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
+    <DepartureOriginProvider>
+      <div className="flex h-[100dvh] overflow-hidden bg-background">
       <AppIconRail
         isGuest={isGuest}
         isLoggedIn={isLoggedIn}
@@ -91,6 +96,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onLogin={login}
         onLogout={logout}
       />
+      <DepartureOriginPickerModal />
     </div>
+    </DepartureOriginProvider>
   );
 }

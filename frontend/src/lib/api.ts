@@ -36,6 +36,7 @@ import {
 import { normalizeInterestEmojis } from "./profile-interests";
 import { normalizeProfileStatus } from "./profile-status";
 import { isValidRoomAccent } from "./room-accent";
+import { deriveResidenceFromAddress } from "./kakao-map";
 import { generateInviteToken, defaultInviteExpiry } from "./invite-token";
 import { isValidMeetingPurpose, type MeetingPurposeId } from "./meeting-purpose";
 import {
@@ -119,6 +120,7 @@ let mockMeetingMemos: Record<
 };
 let mockPlaces = [...MOCK_PLACES] as Place[];
 let mockProfile = { ...MOCK_PROFILE } as Profile;
+let mockSavedLocations: SavedLocation[] = [];
 let mockOtherProfiles: Record<string, Profile> = Object.fromEntries(
   Object.entries(MOCK_OTHER_PROFILES).map(([id, p]) => [id, { ...p, id } as Profile])
 );
@@ -969,6 +971,10 @@ const mockApi = {
       }
       const { profile_decor, status_message, ...rest } = data;
       mockProfile = { ...mockProfile, ...rest };
+      if (rest.home_address !== undefined && rest.home_address) {
+        const derived = deriveResidenceFromAddress(rest.home_address);
+        if (derived) mockProfile.residence = derived;
+      }
       if (status_message !== undefined) {
         const normalized = normalizeProfileStatus(status_message);
         mockProfile.status_message = normalized || undefined;
@@ -999,6 +1005,69 @@ const mockApi = {
     verifySecurity: async (_pin: string) => {
       await delay();
       return { verified: true };
+    },
+  },
+  savedLocations: {
+    list: async () => {
+      await delay();
+      return [...mockSavedLocations];
+    },
+    create: async (data: {
+      label: string;
+      description?: string;
+      address: string;
+      lat: number;
+      lng: number;
+      is_default?: boolean;
+    }) => {
+      await delay();
+      if (mockSavedLocations.length >= 5) {
+        throw new Error("저장 장소는 최대 5개까지 등록할 수 있습니다");
+      }
+      if (data.is_default) {
+        mockSavedLocations = mockSavedLocations.map((s) => ({ ...s, is_default: false }));
+      }
+      const row: SavedLocation = {
+        id: `demo-saved-${Date.now()}`,
+        label: data.label.trim(),
+        description: data.description?.trim().slice(0, 10) || undefined,
+        address: data.address.trim(),
+        lat: data.lat,
+        lng: data.lng,
+        is_default: Boolean(data.is_default),
+        created_at: new Date().toISOString(),
+      };
+      mockSavedLocations = [...mockSavedLocations, row];
+      return row;
+    },
+    update: async (
+      id: string,
+      data: Partial<{
+        label: string;
+        description?: string;
+        address: string;
+        lat: number;
+        lng: number;
+        is_default: boolean;
+      }>
+    ) => {
+      await delay();
+      const idx = mockSavedLocations.findIndex((s) => s.id === id);
+      if (idx < 0) throw new Error("저장 장소를 찾을 수 없습니다");
+      if (data.is_default) {
+        mockSavedLocations = mockSavedLocations.map((s) => ({ ...s, is_default: s.id === id }));
+      }
+      mockSavedLocations[idx] = {
+        ...mockSavedLocations[idx]!,
+        ...data,
+        description: data.description?.trim().slice(0, 10) || mockSavedLocations[idx]!.description,
+      };
+      return mockSavedLocations[idx]!;
+    },
+    delete: async (id: string) => {
+      await delay();
+      mockSavedLocations = mockSavedLocations.filter((s) => s.id !== id);
+      return { ok: true };
     },
   },
   rooms: {
@@ -1661,12 +1730,29 @@ const mockApi = {
         lat: data.lat,
         lng: data.lng,
         category: data.category,
+        kakao_place_id: data.kakao_place_id,
         tier: "bronze",
         avg_rating: 0,
         rating_count: 0,
+        is_mine: true,
       };
       mockPlaces = [place, ...mockPlaces];
-      return enrichPlace(place);
+      return enrichPlace({ ...place, is_mine: true });
+    },
+    delete: async (id: string) => {
+      await delay();
+      const idx = mockPlaces.findIndex((p) => p.id === id);
+      if (idx < 0) throw new Error("장소를 찾을 수 없습니다");
+      const place = mockPlaces[idx]!;
+      if (!place.is_mine && mockProfile.role !== "ADMIN") {
+        throw new Error("등록한 사용자만 삭제할 수 있습니다");
+      }
+      mockPlaces = mockPlaces.filter((p) => p.id !== id);
+      delete mockPlaceReviewsList[id];
+      delete mockPlaceReviews[id];
+      delete mockUserRatings[id];
+      delete mockRecommendationVotes[id];
+      return { ok: true };
     },
     rate: async (
       id: string,
@@ -1798,6 +1884,17 @@ export interface SocialPointTitle {
   min_points: number;
   badge_color: string;
   border_style: string;
+}
+
+export interface SavedLocation {
+  id: string;
+  label: string;
+  description?: string;
+  address: string;
+  lat: number;
+  lng: number;
+  is_default: boolean;
+  created_at?: string;
 }
 
 export interface Profile {
@@ -2141,6 +2238,7 @@ export interface Place {
   my_recommendation_vote?: "RECOMMEND" | "NOT_RECOMMEND" | null;
   is_sample?: boolean;
   top_ranker_endorsement?: TopRankerPlaceEndorsement;
+  is_mine?: boolean;
 }
 
 export interface PlaceReviewItem {
@@ -2225,6 +2323,7 @@ export interface PlaceCreate {
   lat: number;
   lng: number;
   category?: string;
+  kakao_place_id?: string;
   room_id?: string;
 }
 

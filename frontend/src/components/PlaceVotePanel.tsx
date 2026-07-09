@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DepartureOriginChip } from "@/components/DepartureOriginPicker";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { TravelTimeNudge } from "@/components/TravelTimeNudge";
@@ -19,20 +20,17 @@ interface PlaceVotePanelProps {
   appointmentId: string;
   selectedPlaceId: string | null;
   onSelectPlace: (placeId: string) => void;
-  origin?: { lat: number; lng: number; name?: string };
 }
 
 function PlaceCandidateButton({
   place,
   active,
   appointmentId,
-  origin,
   onSelect,
 }: {
   place: Place;
   active: boolean;
   appointmentId: string;
-  origin?: { lat: number; lng: number; name?: string };
   onSelect: () => void;
 }) {
   return (
@@ -57,14 +55,9 @@ function PlaceCandidateButton({
       <TravelTimeNudge
         className="mt-2"
         place={place}
-        origin={origin}
         appointmentId={appointmentId}
       />
-      <KakaoMapLinks
-        className="mt-2"
-        place={place}
-        origin={origin ? { ...origin, name: origin.name ?? "출발" } : undefined}
-      />
+      <KakaoMapLinks className="mt-2" place={place} />
     </button>
   );
 }
@@ -74,7 +67,6 @@ export function PlaceVotePanel({
   appointmentId,
   selectedPlaceId,
   onSelectPlace,
-  origin,
 }: PlaceVotePanelProps) {
   const [places, setPlaces] = useState<Place[]>([]);
 
@@ -110,7 +102,6 @@ export function PlaceVotePanel({
           place={place}
           active={place.id === selectedPlaceId}
           appointmentId={appointmentId}
-          origin={origin}
           onSelect={() => onSelectPlace(place.id)}
         />
       ))}
@@ -129,7 +120,10 @@ export function PlaceVotePanel({
     >
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:space-y-0">
         <Card className="flex min-h-0 flex-col lg:h-[var(--map-split-h)]">
-          <CardTitle className="text-base">장소 후보 지도</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">장소 후보 지도</CardTitle>
+            <DepartureOriginChip />
+          </div>
           <CardDescription className="mt-1">
             후보 장소를 지도에서 확인하고, 이동 시간을 참고해 선택하세요
           </CardDescription>

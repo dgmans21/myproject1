@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FiveStarReplaceModal } from "@/components/FiveStarReplaceModal";
 import { FourHalfStarConfirmModal } from "@/components/FourHalfStarConfirmModal";
+import { DeletePlaceConfirmModal } from "@/components/DeletePlaceConfirmModal";
 import { PlaceReviewsModal } from "@/components/PlaceReviewsModal";
 import { PlaceRatingPicker } from "@/components/PlaceRatingPicker";
 import { RatingDisplay } from "@/components/RatingDisplay";
@@ -15,22 +17,59 @@ import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
 import { KakaoMap } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
+import { KakaoPoiResultList } from "@/components/KakaoPoiResultList";
 import { api, Place, RatingQuota, TIER_LABELS } from "@/lib/api";
 import { PREMIUM_RATING_META } from "@/lib/place-ratings";
-import { geocodeAddress } from "@/lib/kakao-map";
+import { KakaoPoiResult } from "@/lib/kakao-map";
+import {
+  buildPlaceByKakaoIdMap,
+  findPlaceByKakaoId,
+} from "@/lib/place-kakao-match";
+import { useKakaoPlaceSearch } from "@/hooks/use-kakao-place-search";
+import {
+  applyPoiToRegisterForm,
+  clearPlaceRegisterDraft,
+  PLACE_REGISTER_ADD_QUERY,
+  readPlaceRegisterDraft,
+} from "@/lib/place-register-draft";
 import { isGuestSession } from "@/lib/auth-session";
 import type { WriteAction } from "@/lib/permissions";
-import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare } from "lucide-react";
+import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare, Search, X, Loader2, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const PLACE_REGISTER_MAP_HEIGHT = 300;
+
+function matchesPlaceListSearch(place: Place, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    place.name.toLowerCase().includes(q) ||
+    place.address.toLowerCase().includes(q) ||
+    (place.category?.toLowerCase().includes(q) ?? false)
+  );
+}
 
 export default function PlacesPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-6 text-sm text-muted">불러오는 중…</div>}>
+      <PlacesPageContent />
+    </Suspense>
+  );
+}
+
+function PlacesPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const addFormRef = useRef<HTMLDivElement>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [quota, setQuota] = useState<RatingQuota | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [category, setCategory] = useState("");
+  const [kakaoPlaceId, setKakaoPlaceId] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [geocoding, setGeocoding] = useState(false);
+  const poiSearch = useKakaoPlaceSearch();
   const [ratingPlace, setRatingPlace] = useState<string | null>(null);
   const [rating, setRating] = useState(4);
   const [reviewText, setReviewText] = useState("");
@@ -46,8 +85,13 @@ export default function PlacesPage() {
     placeId: string;
     placeName: string;
   } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    placeId: string;
+    placeName: string;
+  } | null>(null);
   const [guestPrompt, setGuestPrompt] = useState(false);
   const [guestAction, setGuestAction] = useState<WriteAction>("review_write");
+  const [listSearch, setListSearch] = useState("");
 
   const requireMember = (action: WriteAction, fn: () => void) => {
     if (isGuestSession()) {
@@ -72,30 +116,87 @@ export default function PlacesPage() {
     loadQuota();
   }, [loadQuota]);
 
-  const markers = useMemo(
-    () => places.map((p) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng })),
-    [places]
+  const filteredPlaces = useMemo(
+    () => places.filter((p) => matchesPlaceListSearch(p, listSearch)),
+    [places, listSearch]
   );
 
-  const handleGeocode = async () => {
-    if (!address.trim()) return;
-    setGeocoding(true);
-    try {
-      const result = await geocodeAddress(address.trim());
-      if (result) {
-        setCoords({ lat: result.lat, lng: result.lng });
-      } else {
-        alert("주소를 찾을 수 없습니다.");
-      }
-    } catch {
-      alert("주소 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setGeocoding(false);
-    }
+  const placeByKakaoId = useMemo(() => buildPlaceByKakaoIdMap(places), [places]);
+
+  const matchedExistingPlace = useMemo(
+    () => findPlaceByKakaoId(placeByKakaoId, kakaoPlaceId),
+    [placeByKakaoId, kakaoPlaceId]
+  );
+
+  const markers = useMemo(
+    () => filteredPlaces.map((p) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng })),
+    [filteredPlaces]
+  );
+
+  const listSearchActive = listSearch.trim().length > 0;
+
+  const resetAddForm = () => {
+    setName("");
+    setAddress("");
+    setCategory("");
+    setKakaoPlaceId(null);
+    setCoords(null);
+    poiSearch.clear();
   };
 
+  const handleSelectPoi = useCallback(
+    (poi: KakaoPoiResult) => {
+      applyPoiToRegisterForm({
+        poi,
+        setName,
+        setAddress,
+        setCoords,
+        setKakaoPlaceId,
+        setSelectedPoiId: poiSearch.setSelectedPoiId,
+      });
+    },
+    [poiSearch.setSelectedPoiId]
+  );
+
+  const scrollToAddForm = useCallback(() => {
+    requestAnimationFrame(() => {
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const openAddForm = useCallback(
+    (poi?: KakaoPoiResult) => {
+      const resolved = poi ?? readPlaceRegisterDraft() ?? undefined;
+      if (resolved) {
+        handleSelectPoi(resolved);
+        clearPlaceRegisterDraft();
+      }
+      setShowAdd(true);
+    },
+    [handleSelectPoi]
+  );
+
+  useEffect(() => {
+    if (!showAdd) return;
+    scrollToAddForm();
+  }, [showAdd, scrollToAddForm]);
+
+  useEffect(() => {
+    if (searchParams.get(PLACE_REGISTER_ADD_QUERY) !== "1") return;
+
+    router.replace("/places", { scroll: false });
+
+    if (isGuestSession()) {
+      setGuestAction("review_write");
+      setGuestPrompt(true);
+      return;
+    }
+
+    openAddForm();
+  }, [searchParams, router, openAddForm]);
+
   const handleAdd = async () => {
-    if (!name || !address) return;
+    if (!name || !address || !kakaoPlaceId || matchedExistingPlace) return;
     const lat = coords?.lat ?? 37.5665;
     const lng = coords?.lng ?? 126.978;
     try {
@@ -105,13 +206,11 @@ export default function PlacesPage() {
         lat,
         lng,
         category: category || undefined,
+        kakao_place_id: kakaoPlaceId,
       });
       setPlaces((prev) => [place, ...prev]);
       setShowAdd(false);
-      setName("");
-      setAddress("");
-      setCategory("");
-      setCoords(null);
+      resetAddForm();
     } catch (err) {
       alert(err instanceof Error ? err.message : "등록 실패");
     }
@@ -165,6 +264,17 @@ export default function PlacesPage() {
     }
   };
 
+  const handleDeletePlace = async (placeId: string) => {
+    try {
+      await api.places.delete(placeId);
+      setPlaces((prev) => prev.filter((p) => p.id !== placeId));
+      if (ratingPlace === placeId) setRatingPlace(null);
+      setDeleteConfirm(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "삭제 실패");
+    }
+  };
+
   const openRating = (place: Place) => {
     setRatingPlace(place.id);
     setRating(place.my_rating ?? 4);
@@ -180,51 +290,169 @@ export default function PlacesPage() {
                 <Map className="h-4 w-4" /> 지도로 보기
               </Button>
             </Link>
-            <Button onClick={() => requireMember("review_write", () => setShowAdd(!showAdd))}>
-              <Plus className="h-4 w-4" /> 장소 등록
+            <Button
+              onClick={() =>
+                requireMember("review_write", () => {
+                  if (showAdd) {
+                    setShowAdd(false);
+                    resetAddForm();
+                  } else {
+                    openAddForm();
+                  }
+                })
+              }
+            >
+              <Plus className="h-4 w-4" /> {showAdd ? "등록 닫기" : "장소 등록"}
             </Button>
           </div>
         </div>
 
         {places.length > 0 && (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Input
+                label="등록된 맛집 검색"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="이름, 주소, 카테고리…"
+              />
+            </div>
+            {listSearchActive && (
+              <Button variant="secondary" onClick={() => setListSearch("")}>
+                <X className="h-4 w-4" /> 초기화
+              </Button>
+            )}
+          </div>
+        )}
+
+        {filteredPlaces.length > 0 && (
           <div className="mt-6">
             <KakaoMap markers={markers} height={320} useClusterer={markers.length > 1} />
           </div>
         )}
 
+        {places.length > 0 && listSearchActive && filteredPlaces.length === 0 && (
+          <div className="mt-6 rounded-xl border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
+            <Search className="mx-auto h-8 w-8 opacity-40" />
+            <p className="mt-3">「{listSearch.trim()}」에 맞는 등록 맛집이 없습니다</p>
+            <Link href="/places/map" className="mt-3 inline-block text-primary hover:underline">
+              지도에서 더 찾아보기 →
+            </Link>
+          </div>
+        )}
+
         {showAdd && (
-          <Card className="mt-6">
+          <div ref={addFormRef} id="place-register-form" className="mt-6 scroll-mt-24">
+          <Card>
             <CardTitle>새 장소 등록</CardTitle>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Input label="이름" value={name} onChange={(e) => setName(e.target.value)} placeholder="맛있는 식당" />
-              <Input label="카테고리" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="한식, 일식 등" />
-              <div className="sm:col-span-2 space-y-2">
-                <Input label="주소" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="서울시 강남구..." />
-                <div className="flex items-center gap-3">
-                  <Button type="button" size="sm" variant="secondary" onClick={handleGeocode} disabled={geocoding}>
-                    {geocoding ? "검색 중..." : "주소 검색"}
-                  </Button>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <Input
+                    label="상호·주소 검색"
+                    value={poiSearch.query}
+                    onChange={(e) => poiSearch.setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void poiSearch.search();
+                    }}
+                    placeholder="맛집 이름, 동네, 도로명 주소…"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void poiSearch.search()}
+                  disabled={poiSearch.loading}
+                >
+                  {poiSearch.loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  검색
+                </Button>
+              </div>
+
+              {poiSearch.error && <p className="text-sm text-accent">{poiSearch.error}</p>}
+
+              <KakaoPoiResultList
+                results={poiSearch.results}
+                placeByKakaoId={placeByKakaoId}
+                selectedPoiId={poiSearch.selectedPoiId}
+                variant="register"
+                onSelect={handleSelectPoi}
+                onViewReviews={(place) =>
+                  setReviewsModal({ placeId: place.id, placeName: place.name })
+                }
+                className="max-h-64"
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="이름"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="맛있는 식당"
+                />
+                <Input
+                  label="카테고리"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="한식, 일식 등"
+                />
+                <div className="sm:col-span-2">
+                  <Input
+                    label="주소"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="서울시 강남구..."
+                  />
                   {coords && (
-                    <span className="text-xs text-muted">
+                    <p className="mt-1 text-xs text-muted">
                       {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-                    </span>
+                    </p>
                   )}
                 </div>
               </div>
             </div>
+
+            {matchedExistingPlace && (
+              <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-accent">
+                선택한 장소는 이미 등록되어 있습니다. 새로 등록할 수 없습니다.
+              </div>
+            )}
+
             {coords && (
               <div className="mt-4">
                 <KakaoMap
-                  markers={[{ id: "preview", name: name || "미리보기", lat: coords.lat, lng: coords.lng }]}
+                  markers={[
+                    {
+                      id: "preview",
+                      name: name || "미리보기",
+                      lat: coords.lat,
+                      lng: coords.lng,
+                    },
+                  ]}
                   center={coords}
                   level={3}
-                  height={240}
+                  height={PLACE_REGISTER_MAP_HEIGHT}
                   useClusterer={false}
                 />
               </div>
             )}
-            <Button className="mt-4" onClick={handleAdd}>등록하기</Button>
+            <Button
+              className="mt-4"
+              onClick={() => void handleAdd()}
+              disabled={!kakaoPlaceId || !name || !address || Boolean(matchedExistingPlace)}
+            >
+              등록하기
+            </Button>
+            {!kakaoPlaceId && (
+              <p className="mt-2 text-xs text-muted">
+                카카오맵 검색 결과에서 장소를 선택해야 등록할 수 있습니다.
+              </p>
+            )}
           </Card>
+          </div>
         )}
 
         <div className="mt-6 flex flex-col gap-2 rounded-xl bg-surface p-4 text-sm text-muted sm:flex-row sm:items-center sm:gap-4">
@@ -259,8 +487,10 @@ export default function PlacesPage() {
               <MapPin className="mx-auto h-12 w-12 text-muted/40" />
               <p className="mt-4 text-muted">등록된 장소가 없습니다</p>
             </div>
+          ) : filteredPlaces.length === 0 ? (
+            null
           ) : (
-            places.map((place) => (
+            filteredPlaces.map((place) => (
               <Card key={place.id}>
                 <div className="flex items-start justify-between">
                   <Badge variant="tier" tier={place.tier}>
@@ -298,20 +528,50 @@ export default function PlacesPage() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant={place.my_recommendation_vote === "RECOMMEND" ? "primary" : "secondary"}
-                    onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "RECOMMEND"))}
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" /> 추천
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={place.my_recommendation_vote === "NOT_RECOMMEND" ? "accent" : "ghost"}
-                    onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "NOT_RECOMMEND"))}
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" /> 비추천
-                  </Button>
+                  {place.is_mine && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="border-2 border-red-900/50 text-red-700 hover:border-red-800 hover:bg-red-50"
+                      onClick={() =>
+                        requireMember("review_write", () =>
+                          setDeleteConfirm({ placeId: place.id, placeName: place.name })
+                        )
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> 삭제
+                    </Button>
+                  )}
+                  {!place.is_mine && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className={cn(
+                          "border-2 font-semibold transition-colors",
+                          place.my_recommendation_vote === "RECOMMEND"
+                            ? "border-red-600 bg-red-600 text-white shadow-sm hover:border-red-700 hover:bg-red-700 hover:text-white"
+                            : "border-border bg-surface text-muted hover:border-red-200 hover:bg-red-50/50 hover:text-red-600"
+                        )}
+                        onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "RECOMMEND"))}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" /> 추천
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className={cn(
+                          "border-2 font-semibold transition-colors",
+                          place.my_recommendation_vote === "NOT_RECOMMEND"
+                            ? "border-blue-600 bg-blue-600 text-white shadow-sm hover:border-blue-700 hover:bg-blue-700 hover:text-white"
+                            : "border-border bg-surface text-muted hover:border-blue-200 hover:bg-blue-50/50 hover:text-blue-600"
+                        )}
+                        onClick={() => requireMember("review_write", () => handleRecommendation(place.id, "NOT_RECOMMEND"))}
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" /> 비추천
+                      </Button>
+                    </>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -378,6 +638,15 @@ export default function PlacesPage() {
         onCancel={() => setReplaceModal(null)}
         onConfirm={(replacePlaceId) => {
           if (replaceModal) submitRating(replaceModal.placeId, replacePlaceId);
+        }}
+      />
+
+      <DeletePlaceConfirmModal
+        open={Boolean(deleteConfirm)}
+        placeName={deleteConfirm?.placeName ?? ""}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm) void handleDeletePlace(deleteConfirm.placeId);
         }}
       />
 
