@@ -10,7 +10,9 @@ import { RoomJoinCard } from "@/components/RoomJoinCard";
 import { RoomActionMenu } from "@/components/RoomActionMenu";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { api, ROOM_TYPE_LABELS } from "@/lib/api";
+import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { isGuestSession } from "@/lib/auth-session";
+import { scrollFormIntoView } from "@/lib/mobile-form-scroll";
 import { useRoomStore } from "@/stores/room-store";
 import { Plus, Users } from "lucide-react";
 import Link from "next/link";
@@ -27,10 +29,7 @@ export default function GroupsPage() {
 
   useEffect(() => {
     if (!showCreate) return;
-    requestAnimationFrame(() => {
-      createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      document.getElementById("room-create-name")?.focus();
-    });
+    scrollFormIntoView(createFormRef.current, { focusSelector: "#room-create-name" });
   }, [showCreate]);
 
   const handlePromote = async (id: string) => {
@@ -57,11 +56,11 @@ export default function GroupsPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="sr-only">
             <h1>방</h1>
           </div>
-          <Button onClick={openCreate}>
+          <Button className="w-full sm:ml-auto sm:w-auto" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             {showCreate ? "닫기" : "새 방"}
           </Button>
@@ -124,7 +123,18 @@ export default function GroupsPage() {
                     </span>
                   </div>
                   <CardTitle className="mt-3">{room.name}</CardTitle>
-                  {room.purpose && <CardDescription>{room.purpose}</CardDescription>}
+                  {(meetingPurposeLabel({
+                    purpose: room.meeting_purpose,
+                    purpose_custom: room.meeting_purpose_custom,
+                  }) ??
+                    room.purpose) && (
+                    <CardDescription>
+                      {meetingPurposeLabel({
+                        purpose: room.meeting_purpose,
+                        purpose_custom: room.meeting_purpose_custom,
+                      }) ?? room.purpose}
+                    </CardDescription>
+                  )}
                   {room.expire_at && (
                     <p className="mt-2 text-xs text-warm">
                       만료 {room.expire_at.slice(0, 10)}

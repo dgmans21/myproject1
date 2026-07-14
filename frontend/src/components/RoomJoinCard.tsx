@@ -9,7 +9,7 @@ import { api, JoinPreview } from "@/lib/api";
 import { useRoomStore } from "@/stores/room-store";
 import { KeyRound } from "lucide-react";
 
-/** 비밀번호로 방 입장 (mock — 실서비스는 서버에서 해시 검증) */
+/** 비밀번호로 방 입장 */
 export function RoomJoinCard() {
   const router = useRouter();
   const addRoom = useRoomStore((s) => s.addRoom);
@@ -56,7 +56,7 @@ export function RoomJoinCard() {
         <KeyRound className="h-4 w-4 text-primary" /> 비밀번호로 방 참가
       </CardTitle>
       <CardDescription className="mt-1">
-        방장이 알려준 방 ID와 입장 비밀번호를 입력하세요.
+        방장이 알려준 방 ID(UUID)와 입장 비밀번호를 입력하세요.
       </CardDescription>
       <div className="mt-4 space-y-3">
         <Input

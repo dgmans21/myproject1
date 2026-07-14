@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
 import { FriendInviteModal } from "@/components/FriendInviteModal";
+import { MeetingPurposePicker } from "@/components/MeetingPurposePicker";
 import { useRoomStore } from "@/stores/room-store";
 import { api, FriendSummary, RoomCreate } from "@/lib/api";
+import type { MeetingPurposeValue } from "@/lib/meeting-purpose";
 import { cn } from "@/lib/utils";
 import { DEFAULT_ROOM_ACCENT, ROOM_ACCENT_PRESETS } from "@/lib/room-accent";
 import { Crown, CalendarDays, UserPlus, X, Zap } from "lucide-react";
@@ -25,7 +28,8 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
   const addRoom = useRoomStore((s) => s.addRoom);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [purpose, setPurpose] = useState("");
+  const [meetingPurpose, setMeetingPurpose] = useState<MeetingPurposeValue>({});
+  const [purposeCustomDraft, setPurposeCustomDraft] = useState("");
   const [roomType, setRoomType] = useState<"ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE">("ONE_TIME");
   const [expireDate, setExpireDate] = useState(defaultExpireDate);
   const [accentColor, setAccentColor] = useState<string>(DEFAULT_ROOM_ACCENT);
@@ -48,12 +52,22 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
 
   const handleCreate = useCallback(async () => {
     if (!name.trim()) return;
+    if (
+      roomType !== "TEAM_SCHEDULE" &&
+      meetingPurpose.purpose === "OTHER" &&
+      !purposeCustomDraft.trim()
+    ) {
+      alert("기타 목적을 입력하세요");
+      return;
+    }
     setCreating(true);
     try {
       const payload: RoomCreate = {
         name: name.trim(),
         description: description || undefined,
-        purpose: purpose || undefined,
+        meeting_purpose: meetingPurpose.purpose,
+        meeting_purpose_custom:
+          meetingPurpose.purpose === "OTHER" ? purposeCustomDraft.trim() || undefined : undefined,
         room_type: roomType,
         expire_date: roomType === "ONE_TIME" ? expireDate : undefined,
         accent_color: accentColor,
@@ -79,7 +93,8 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
   }, [
     name,
     description,
-    purpose,
+    meetingPurpose,
+    purposeCustomDraft,
     roomType,
     expireDate,
     accentColor,
@@ -118,12 +133,25 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
             onChange={(e) => setName(e.target.value)}
             placeholder="이번 주말 모임"
           />
-          <Input label="목적" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="저녁 회식, 스터디 등" />
+          {roomType !== "TEAM_SCHEDULE" && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">모임 주목적 (선택)</p>
+              <MeetingPurposePicker
+                value={meetingPurpose}
+                customDraft={purposeCustomDraft}
+                onChange={(next) => {
+                  setMeetingPurpose(next);
+                  if (next.purpose !== "OTHER") setPurposeCustomDraft("");
+                }}
+                onCustomDraftChange={setPurposeCustomDraft}
+              />
+            </div>
+          )}
           <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">방 유형</p>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => setRoomType("ONE_TIME")}
@@ -208,7 +236,12 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
           <div className="space-y-2 rounded-xl border border-border bg-surface/50 p-4">
             <p className="text-sm font-medium text-foreground">친구 초대 (선택)</p>
             {friends.length === 0 ? (
-              <p className="text-xs text-muted">초대할 친구가 없습니다.</p>
+              <p className="text-xs text-muted">
+                초대할 친구가 없습니다.{" "}
+                <Link href="/friends" className="text-primary hover:underline">
+                  친구 추가하기
+                </Link>
+              </p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -270,12 +303,27 @@ export function RoomCreateForm({ onClose }: RoomCreateFormProps) {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleCreate} disabled={creating || !name.trim()} variant="accent">
-              {roomType === "ONE_TIME" ? "임시방 만들기" : "고정방 만들기"}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button
+              className="w-full sm:w-auto"
+              onClick={handleCreate}
+              disabled={creating || !name.trim()}
+              variant="accent"
+            >
+              {roomType === "ONE_TIME"
+                ? "임시방 만들기"
+                : roomType === "TEAM_SCHEDULE"
+                  ? "팀 일정방 만들기"
+                  : "고정방 만들기"}
               {inviteIds.length > 0 ? ` · ${inviteIds.length}명 초대` : ""}
             </Button>
-            <Button type="button" variant="ghost" onClick={onClose} disabled={creating}>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              variant="ghost"
+              onClick={onClose}
+              disabled={creating}
+            >
               취소
             </Button>
           </div>

@@ -61,6 +61,8 @@ export function AppointmentBriefingPanel({
   onRequireAuth,
 }: AppointmentBriefingPanelProps) {
   const [briefing, setBriefing] = useState<AppointmentBriefing | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [posting, setPosting] = useState(false);
@@ -68,11 +70,20 @@ export function AppointmentBriefingPanel({
   const [settlementOpen, setSettlementOpen] = useState(false);
 
   const reload = useCallback(async () => {
-    const data = await api.appointments.briefing(appointment.id);
-    setBriefing(data);
+    try {
+      const data = await api.appointments.briefing(appointment.id);
+      setBriefing(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "브리핑을 불러오지 못했습니다");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, [appointment.id]);
 
   useEffect(() => {
+    setLoading(true);
     reload().catch(() => {});
     api.profiles.me().then(setProfile).catch(() => {});
     const timer = setInterval(() => {
@@ -118,10 +129,36 @@ export function AppointmentBriefingPanel({
     }
   };
 
-  if (!briefing || !appointment.confirmed_date || !appointment.confirmed_time) {
+  if (loading && !briefing) {
     return <p className="text-sm text-muted">브리핑 불러오는 중...</p>;
   }
 
+  if (error && !briefing) {
+    return (
+      <div className="rounded-xl border border-warm/30 bg-warm/5 px-4 py-3 text-sm">
+        <p className="text-foreground">브리핑을 불러오지 못했습니다.</p>
+        <p className="mt-1 text-muted">{error}</p>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="mt-3"
+          onClick={() => {
+            setLoading(true);
+            reload().catch(() => {});
+          }}
+        >
+          다시 시도
+        </Button>
+      </div>
+    );
+  }
+
+  if (!briefing) {
+    return <p className="text-sm text-muted">브리핑 정보가 없습니다.</p>;
+  }
+
+  const confirmedDate = briefing.confirmed_date;
+  const confirmedTime = briefing.confirmed_time;
   const meetingEnded = briefing.meeting_ended;
 
   return (
@@ -133,7 +170,7 @@ export function AppointmentBriefingPanel({
             <Flag className="h-5 w-5 text-accent" />
             <h2 className="text-lg font-bold text-foreground">약속 확정 브리핑</h2>
           </div>
-          <Badge variant="accent">{formatDDay(appointment.confirmed_date)}</Badge>
+          <Badge variant="accent">{formatDDay(confirmedDate)}</Badge>
         </div>
         <p className="mt-1 text-sm font-medium text-foreground">&quot;{briefing.title}&quot;</p>
       </div>
@@ -154,8 +191,8 @@ export function AppointmentBriefingPanel({
             <span className="text-muted">📅 일시</span>
             <br />
             <strong className="text-foreground">
-              {formatDate(appointment.confirmed_date)}{" "}
-              {formatTime(appointment.confirmed_time)}
+              {formatDate(confirmedDate)}{" "}
+              {formatTime(confirmedTime)}
             </strong>
           </p>
           <p>
@@ -251,7 +288,7 @@ export function AppointmentBriefingPanel({
                   <p className="text-foreground">
                     <strong>{c.display_name}</strong>: {c.body}
                   </p>
-                  {profile && canDeleteContent(Boolean(c.is_me), profile) && (
+                  {profile && !isGuestSession() && canDeleteContent(Boolean(c.is_me), profile) && (
                     <button
                       type="button"
                       onClick={() => handleDeleteComment(c.id)}

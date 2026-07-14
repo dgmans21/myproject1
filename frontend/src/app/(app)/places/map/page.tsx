@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KakaoMap, KakaoMapHandle } from "@/components/KakaoMap";
 import { KakaoMapLinks } from "@/components/KakaoMapLinks";
 import { KakaoPoiResultList } from "@/components/KakaoPoiResultList";
@@ -30,18 +30,22 @@ import {
   placesMapViewportHeight,
 } from "@/lib/map-viewport-height";
 import { placeRegisterHref } from "@/lib/place-register-draft";
+import { parsePlacesMapPickParams } from "@/lib/places-map-pick";
+import { useIsMobileLayout } from "@/lib/use-mobile-layout";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Loader2, MapPin, MessageSquare, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MapPin, MessageSquare, Plus, Search, Trash2, X } from "lucide-react";
 
 function SelectedPlaceCard({
   place,
   onOpenReviews,
   onDelete,
+  onPickForAppointment,
   className,
 }: {
   place: Place;
   onOpenReviews: () => void;
   onDelete?: () => void;
+  onPickForAppointment?: () => void;
   className?: string;
 }) {
   return (
@@ -67,6 +71,11 @@ function SelectedPlaceCard({
         />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
+        {onPickForAppointment && (
+          <Button size="sm" onClick={onPickForAppointment}>
+            <Check className="h-3.5 w-3.5" /> 이 약속 장소로 선택
+          </Button>
+        )}
         <Button size="sm" variant="secondary" onClick={onOpenReviews}>
           <MessageSquare className="h-3.5 w-3.5" /> 리뷰 보기
         </Button>
@@ -131,7 +140,19 @@ function SelectedSearchPoiCard({
 }
 
 export default function PlacesMapPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-6 text-sm text-muted">불러오는 중…</div>}>
+      <PlacesMapPageContent />
+    </Suspense>
+  );
+}
+
+function PlacesMapPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pickParams = parsePlacesMapPickParams(searchParams);
+  const { pickMode, roomId: pickRoomId, returnPath } = pickParams;
+  const isMobile = useIsMobileLayout();
   const [places, setPlaces] = useState<Place[]>([]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapLevel, setMapLevel] = useState<number | undefined>(undefined);
@@ -166,8 +187,20 @@ export default function PlacesMapPage() {
   } = poiSearch;
 
   useEffect(() => {
-    api.places.list().then(setPlaces).catch(() => {});
-  }, []);
+    const loader = pickMode && pickRoomId
+      ? api.places.list(pickRoomId)
+      : api.places.list();
+    loader.then(setPlaces).catch(() => {});
+  }, [pickMode, pickRoomId]);
+
+  const pickPlaceForAppointment = useCallback(
+    (placeId: string) => {
+      if (!returnPath) return;
+      const sep = returnPath.includes("?") ? "&" : "?";
+      router.push(`${returnPath}${sep}placeId=${encodeURIComponent(placeId)}`);
+    },
+    [returnPath, router]
+  );
 
   const placeByKakaoId = useMemo(() => buildPlaceByKakaoIdMap(places), [places]);
 
@@ -215,9 +248,14 @@ export default function PlacesMapPage() {
 
   const goToRegister = useCallback(
     (poi?: KakaoPoiResult) => {
-      router.push(placeRegisterHref(poi));
+      router.push(
+        placeRegisterHref(poi, {
+          roomId: pickRoomId ?? undefined,
+          returnPath: returnPath ?? undefined,
+        })
+      );
     },
-    [router]
+    [router, pickRoomId, returnPath]
   );
 
   const handleSearchSubmit = () => {
@@ -264,9 +302,7 @@ export default function PlacesMapPage() {
   };
 
   const hasSearchResults = poiSearchResults.length > 0;
-  const mobileMapHeight = placesMapViewportHeight(
-    Boolean(selectedPlace || selectedSearchPoi)
-  );
+  const mobileMapHeight = placesMapViewportHeight(false);
   const hasViewport = viewportCenter != null;
   const showEmptyNearby =
     hasViewport &&
@@ -287,11 +323,17 @@ export default function PlacesMapPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:max-w-none lg:px-6">
       <Link
-        href="/places"
+        href={pickMode && returnPath ? returnPath : "/places"}
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> 맛집 목록
+        <ArrowLeft className="h-4 w-4" /> {pickMode ? "약속으로 돌아가기" : "맛집 목록"}
       </Link>
+
+      {pickMode && (
+        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground">
+          <strong>약속 장소 선택</strong> — 맛집을 고르거나 새로 등록한 뒤 「이 약속 장소로 선택」을 누르세요.
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
@@ -351,7 +393,7 @@ export default function PlacesMapPage() {
             className="h-full min-h-0"
             useClusterer={markers.length > 1}
             fitBounds={false}
-            recenterOnSelect
+            recenterOnSelect={!isMobile}
             mapHandleRef={mapHandleRef}
             overlay={
               <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3">
@@ -406,6 +448,11 @@ export default function PlacesMapPage() {
                 })
               }
               onDelete={() => requestDeletePlace(selectedPlace)}
+              onPickForAppointment={
+                pickMode && returnPath
+                  ? () => pickPlaceForAppointment(selectedPlace.id)
+                  : undefined
+              }
             />
           )}
 
@@ -496,6 +543,11 @@ export default function PlacesMapPage() {
             })
           }
           onDelete={() => requestDeletePlace(selectedPlace)}
+          onPickForAppointment={
+            pickMode && returnPath
+              ? () => pickPlaceForAppointment(selectedPlace.id)
+              : undefined
+          }
         />
       )}
 

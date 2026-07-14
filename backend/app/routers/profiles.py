@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_id
 from app.database import get_supabase
@@ -10,6 +10,7 @@ from app.models.schemas import (
     FiveStarPlaceItem,
     FiveStarQuotaInfo,
     ProfileResponse,
+    ProfileSearchHit,
     ProfileUpdate,
     RankingEntry,
     RatingQuotaResponse,
@@ -17,6 +18,7 @@ from app.models.schemas import (
     SecurityVerifyRequest,
     SocialPointTitle,
 )
+from app.services.departure_origin import departure_update_fields
 from app.services.profile_decor import merge_profile_decor, normalize_status_message
 from app.services.rating import get_user_rating_quota
 from app.services.residence import derive_residence_from_address
@@ -128,6 +130,46 @@ async def get_trust_ranking(
     return entries
 
 
+@router.get("/search", response_model=list[ProfileSearchHit])
+async def search_profiles(
+    q: str = Query(..., min_length=1, max_length=50),
+    user_id: str = Depends(get_current_user_id),
+):
+    """닉네임으로 사용자 검색 (본인·이미 등록한 친구 제외)"""
+    sb = get_supabase()
+    term = q.strip()
+    if not term:
+        return []
+
+    safe = term.replace("%", "").replace("_", "")
+    friend_rows = sb.table("friendships").select("friend_id").eq("user_id", user_id).execute()
+    exclude = {user_id, *(str(r["friend_id"]) for r in friend_rows.data or [])}
+
+    result = (
+        sb.table("profiles")
+        .select("id, display_name, residence")
+        .ilike("display_name", f"%{safe}%")
+        .order("display_name")
+        .limit(20)
+        .execute()
+    )
+    hits: list[ProfileSearchHit] = []
+    for row in result.data or []:
+        rid = str(row["id"])
+        if rid in exclude:
+            continue
+        hits.append(
+            ProfileSearchHit(
+                user_id=row["id"],
+                display_name=row.get("display_name") or "알 수 없음",
+                residence=row.get("residence"),
+            )
+        )
+        if len(hits) >= 15:
+            break
+    return hits
+
+
 @router.patch("/me", response_model=ProfileResponse)
 async def update_my_profile(
     body: ProfileUpdate,
@@ -200,6 +242,29 @@ async def update_my_profile(
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if update_data.pop("clear_current_departure", None):
+        update_data.update(departure_update_fields(clear=True))
+    elif any(
+        k in update_data
+        for k in ("current_departure_lat", "current_departure_lng", "current_departure_label")
+    ):
+        lat = update_data.get("current_departure_lat")
+        lng = update_data.get("current_departure_lng")
+        if lat is not None and lng is not None:
+            update_data.update(
+                departure_update_fields(
+                    label=update_data.pop("current_departure_label", None),
+                    address=update_data.pop("current_departure_address", None),
+                    lat=lat,
+                    lng=lng,
+                )
+            )
+        else:
+            update_data.pop("current_departure_label", None)
+            update_data.pop("current_departure_address", None)
+            update_data.pop("current_departure_lat", None)
+            update_data.pop("current_departure_lng", None)
 
     if not update_data:
         raise HTTPException(status_code=400, detail="수정할 항목이 없습니다")

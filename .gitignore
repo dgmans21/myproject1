@@ -64,3 +64,4 @@ supabase/SUPABASE_CONTEXT.md
 supabase/supabase_review_tasks.md
 scripts/check-local.ps1
 supabase/migrations
+.cursor/rules/update-developers-local.mdc

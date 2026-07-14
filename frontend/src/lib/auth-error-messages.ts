@@ -8,6 +8,7 @@ const BY_CODE: Record<string, string> = {
   same_password: "새 비밀번호는 기존 비밀번호와 달라야 합니다.",
   over_email_send_rate_limit: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
   over_request_rate_limit: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+  email_address_invalid: "테스트용 이메일 도메인은 사용할 수 없습니다. Gmail 등 실제 이메일을 사용해 주세요.",
   signup_disabled: "현재 회원가입이 허용되지 않습니다.",
   user_not_found: "가입되지 않은 이메일입니다.",
   session_not_found: "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.",

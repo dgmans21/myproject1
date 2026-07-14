@@ -88,8 +88,20 @@ export function getNavSection(pathname: string, isAdmin = false): AppNavSection 
       links: [{ href: "/ranking", label: "신뢰도 랭킹" }],
     };
   }
+  if (pathname.startsWith("/friends")) {
+    return {
+      title: "계정",
+      links: [
+        { href: "/profile", label: "마이페이지" },
+        { href: "/friends", label: "친구 관리" },
+      ],
+    };
+  }
   if (pathname.startsWith("/profile")) {
-    const links: AppNavLink[] = [{ href: "/profile", label: "마이페이지" }];
+    const links: AppNavLink[] = [
+      { href: "/profile", label: "마이페이지" },
+      { href: "/friends", label: "친구 관리" },
+    ];
     if (isAdmin) {
       links.push({ href: "/admin/visits", label: "방문 조회 (관리자)" });
     }

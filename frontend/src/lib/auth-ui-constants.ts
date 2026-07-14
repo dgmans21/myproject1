@@ -12,13 +12,13 @@ export const AUTH_AGE_OPTIONS = [
 
 export type AuthAgeGroup = (typeof AUTH_AGE_OPTIONS)[number]["value"];
 
-export type AuthSocialProvider = "google" | "kakao";
-// | "naver" — Supabase custom OIDC + Edge Function 필요, 보류
+export type AuthSocialProvider = "google" | "kakao" | "naver";
 
 export const AUTH_SOCIAL_PROVIDERS: {
   id: AuthSocialProvider;
   label: string;
-  supabaseProvider: string;
+  /** Supabase 내장 provider. naver는 앱 전용 라우트 */
+  supabaseProvider: "google" | "kakao" | null;
   className: string;
 }[] = [
   {
@@ -34,10 +34,10 @@ export const AUTH_SOCIAL_PROVIDERS: {
     supabaseProvider: "kakao",
     className: "bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00] border border-[#F0D500]",
   },
-  // {
-  //   id: "naver",
-  //   label: "네이버로 계속하기",
-  //   supabaseProvider: "custom:naver",
-  //   className: "bg-[#03C75A] text-white hover:bg-[#02B350] border border-[#02A84E]",
-  // },
+  {
+    id: "naver",
+    label: "네이버로 계속하기",
+    supabaseProvider: null,
+    className: "bg-[#03C75A] text-white hover:bg-[#02B350] border border-[#02A84E]",
+  },
 ];

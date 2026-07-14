@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from app.database import get_supabase
 from app.models.schemas import (
@@ -8,7 +8,17 @@ from app.models.schemas import (
     DepartureStatus,
     MemberBriefingStatus,
 )
+from app.services.departure_origin import (
+    fetch_default_saved_location,
+    resolve_departure_from_profile,
+)
 from app.services.kakao import get_travel_time
+
+_PROFILE_DEPARTURE_SELECT = (
+    "display_name, home_lat, home_lng, home_address, residence, "
+    "current_departure_label, current_departure_address, "
+    "current_departure_lat, current_departure_lng"
+)
 
 
 async def record_confirm_travel_logs(sb, appointment_id: str, place_id: str, room_id: str) -> None:
@@ -22,22 +32,24 @@ async def record_confirm_travel_logs(sb, appointment_id: str, place_id: str, roo
 
     members = (
         sb.table("room_members")
-        .select("user_id, profiles(home_lat, home_lng, home_address, residence)")
+        .select(f"user_id, profiles({_PROFILE_DEPARTURE_SELECT})")
         .eq("room_id", room_id)
         .execute()
     )
 
     for row in members.data or []:
         prof = row.get("profiles") or {}
-        lat, lng = prof.get("home_lat"), prof.get("home_lng")
-        if lat is None or lng is None:
+        uid = row["user_id"]
+        default_saved = fetch_default_saved_location(sb, uid)
+        origin = resolve_departure_from_profile(prof, default_saved)
+        if not origin:
             continue
         try:
-            result = await get_travel_time(float(lat), float(lng), dest_lat, dest_lng)
+            result = await get_travel_time(origin.lat, origin.lng, dest_lat, dest_lng)
         except Exception:
             continue
         sb.table("user_travel_logs").insert({
-            "user_id": row["user_id"],
+            "user_id": uid,
             "place_id": place_id,
             "appointment_id": appointment_id,
             "duration_minutes": result.duration_minutes,
@@ -45,12 +57,17 @@ async def record_confirm_travel_logs(sb, appointment_id: str, place_id: str, roo
         }).execute()
 
 
-def _origin_label(prof: dict) -> str:
-    if prof.get("home_address"):
-        return prof["home_address"]
-    if prof.get("residence"):
-        return prof["residence"]
-    return "출발지 미등록"
+def _parse_confirmed_date(value: date | str) -> date:
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value))
+
+
+def _parse_confirmed_time(value: time | str) -> time:
+    if isinstance(value, time):
+        return value
+    hh, mm, *_ = str(value).split(":")
+    return time(int(hh), int(mm))
 
 
 def _punctuality(start: datetime, duration_min: int, departed: bool) -> str:
@@ -93,7 +110,7 @@ async def build_briefing(sb, appointment_id: str, user_id: str) -> AppointmentBr
 
     members_raw = (
         sb.table("room_members")
-        .select("user_id, profiles(display_name, home_lat, home_lng, home_address, residence)")
+        .select(f"user_id, profiles({_PROFILE_DEPARTURE_SELECT})")
         .eq("room_id", row["room_id"])
         .execute()
     )
@@ -106,13 +123,8 @@ async def build_briefing(sb, appointment_id: str, user_id: str) -> AppointmentBr
     )
     departure_map = {d["user_id"]: d["status"] for d in (departure_rows.data or [])}
 
-    confirmed_date = row["confirmed_date"]
-    confirmed_time_str = row["confirmed_time"]
-    if isinstance(confirmed_time_str, str):
-        hh, mm, *_ = confirmed_time_str.split(":")
-        confirmed_time = time(int(hh), int(mm))
-    else:
-        confirmed_time = confirmed_time_str
+    confirmed_date = _parse_confirmed_date(row["confirmed_date"])
+    confirmed_time = _parse_confirmed_time(row["confirmed_time"])
 
     start_naive = datetime.combine(confirmed_date, confirmed_time)
     now = datetime.now()
@@ -126,9 +138,12 @@ async def build_briefing(sb, appointment_id: str, user_id: str) -> AppointmentBr
         dep = departure_map.get(uid, DepartureStatus.NOT_DEPARTED.value)
         departed = dep == DepartureStatus.EN_ROUTE.value
 
+        default_saved = fetch_default_saved_location(sb, uid)
+        origin = resolve_departure_from_profile(prof, default_saved)
+
         duration = None
         distance = None
-        if dest_lat is not None and prof.get("home_lat") is not None:
+        if dest_lat is not None and origin is not None:
             log = (
                 sb.table("user_travel_logs")
                 .select("duration_minutes, distance_meters")
@@ -143,12 +158,7 @@ async def build_briefing(sb, appointment_id: str, user_id: str) -> AppointmentBr
                 distance = log.data[0]["distance_meters"]
             elif departed:
                 try:
-                    live = await get_travel_time(
-                        float(prof["home_lat"]),
-                        float(prof["home_lng"]),
-                        dest_lat,
-                        dest_lng,
-                    )
+                    live = await get_travel_time(origin.lat, origin.lng, dest_lat, dest_lng)
                     duration = live.duration_minutes
                     distance = live.distance_meters
                 except Exception:
@@ -163,7 +173,7 @@ async def build_briefing(sb, appointment_id: str, user_id: str) -> AppointmentBr
             MemberBriefingStatus(
                 user_id=uid,
                 display_name=prof.get("display_name") or "멤버",
-                origin_label=_origin_label(prof),
+                origin_label=origin.label if origin else "출발지 미등록",
                 duration_minutes=duration,
                 distance_meters=distance,
                 estimated_arrival=eta_str,
@@ -226,6 +236,29 @@ async def post_comment(sb, appointment_id: str, user_id: str, body: AppointmentC
         created_at=row["created_at"],
         is_me=True,
     )
+
+
+def delete_comment(sb, appointment_id: str, comment_id: str, user_id: str) -> None:
+    from fastapi import HTTPException
+
+    comment = (
+        sb.table("appointment_comments")
+        .select("id, user_id")
+        .eq("id", comment_id)
+        .eq("appointment_id", appointment_id)
+        .single()
+        .execute()
+    )
+    if not comment.data:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
+
+    author_id = str(comment.data["user_id"])
+    if author_id != user_id:
+        prof = sb.table("profiles").select("role").eq("id", user_id).single().execute()
+        if (prof.data or {}).get("role") != "ADMIN":
+            raise HTTPException(status_code=403, detail="삭제 권한이 없습니다")
+
+    sb.table("appointment_comments").delete().eq("id", comment_id).execute()
 
 
 def set_departure_status(sb, appointment_id: str, user_id: str, status: DepartureStatus):

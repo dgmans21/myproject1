@@ -31,6 +31,9 @@ export function getPageMeta(pathname: string): PageMeta {
   if (pathname.startsWith("/ranking")) {
     return { title: "신뢰도 랭킹", description: "칭호 · 신뢰도 순위" };
   }
+  if (pathname.startsWith("/friends")) {
+    return { title: "친구 관리", description: "방 초대용 친구 목록" };
+  }
   if (pathname.startsWith("/profile")) {
     return { title: "마이페이지", description: "프로필 · 칭호 · 잔디" };
   }

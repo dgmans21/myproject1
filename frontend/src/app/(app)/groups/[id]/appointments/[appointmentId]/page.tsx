@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -27,7 +27,16 @@ import Link from "next/link";
 const TIME_SLOTS = ["11:00", "12:00", "13:00", "17:00", "18:00", "19:00", "20:00"];
 
 export default function AppointmentPage() {
+  return (
+    <Suspense fallback={<div className="px-4 py-6 text-sm text-muted">불러오는 중…</div>}>
+      <AppointmentPageContent />
+    </Suspense>
+  );
+}
+
+function AppointmentPageContent() {
   const { id: groupId, appointmentId } = useParams<{ id: string; appointmentId: string }>();
+  const searchParams = useSearchParams();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [dateSummary, setDateSummary] = useState<VoteSummary[]>([]);
   const [timeSummary, setTimeSummary] = useState<TimeSlotSummary[]>([]);
@@ -66,6 +75,11 @@ export default function AppointmentPage() {
   };
 
   useEffect(() => { load(); }, [appointmentId]);
+
+  useEffect(() => {
+    const placeId = searchParams.get("placeId");
+    if (placeId) setSelectedPlaceId(placeId);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -194,10 +208,13 @@ export default function AppointmentPage() {
                 <CardTitle>날짜별 참여 현황</CardTitle>
                 <div className="mt-4 space-y-2">
                   {dateSummary.map((s) => (
-                    <div key={s.vote_date} className="flex items-center justify-between text-sm">
-                      <span>{formatDate(s.vote_date)}</span>
-                      <div className="flex items-center gap-3">
-                        <div className="h-2 w-32 rounded-full bg-surface overflow-hidden">
+                    <div
+                      key={s.vote_date}
+                      className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="shrink-0">{formatDate(s.vote_date)}</span>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-2 min-w-0 flex-1 rounded-full bg-surface overflow-hidden sm:max-w-32">
                           <div
                             className="h-full rounded-full bg-primary transition-all"
                             style={{ width: `${s.availability_rate}%` }}
@@ -270,6 +287,7 @@ export default function AppointmentPage() {
               <PlaceVotePanel
                 roomId={appointment.room_id}
                 appointmentId={appointment.id}
+                groupId={groupId}
                 selectedPlaceId={selectedPlaceId}
                 onSelectPlace={setSelectedPlaceId}
               />
@@ -281,9 +299,14 @@ export default function AppointmentPage() {
                 <p className="mt-1 text-sm text-muted">장소를 선택한 뒤 시간대를 확정하세요</p>
                 <div className="mt-4 space-y-2">
                   {timeSummary.slice(0, 10).map((s) => (
-                    <div key={`${s.vote_date}-${s.vote_time}`} className="flex items-center justify-between text-sm gap-2 flex-wrap">
-                      <span>{formatDate(s.vote_date)} {formatTime(s.vote_time)}</span>
-                      <div className="flex items-center gap-2">
+                    <div
+                      key={`${s.vote_date}-${s.vote_time}`}
+                      className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="shrink-0">
+                        {formatDate(s.vote_date)} {formatTime(s.vote_time)}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="accent">{s.vote_count}표</Badge>
                         <Badge>{s.total_score}점</Badge>
                         <Button

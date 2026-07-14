@@ -82,6 +82,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onOpenMobileMenu={() => setMobileOpen(true)}
           onExpandNavPanel={() => setNavCollapsed(false)}
           navPanelCollapsed={navCollapsed}
+          isGuest={isGuest}
+          isLoggedIn={isLoggedIn}
+          onLogin={login}
+          onLogout={logout}
         />
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
       </div>

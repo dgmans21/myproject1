@@ -23,16 +23,23 @@ export function useAuthSession(): AuthSessionState {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const refresh = useCallback(async () => {
-    const guest = isGuestSession();
-    setIsGuest(guest);
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      setIsLoggedIn(Boolean(user));
+      const loggedIn = Boolean(user);
+      setIsLoggedIn(loggedIn);
+
+      if (loggedIn) {
+        clearGuestSession();
+        setIsGuest(false);
+      } else {
+        setIsGuest(isGuestSession());
+      }
     } catch {
       setIsLoggedIn(false);
+      setIsGuest(isGuestSession());
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +72,7 @@ export function useAuthSession(): AuthSessionState {
     isLoading,
     isGuest,
     isLoggedIn,
-    needsLogin: isGuest || !isLoggedIn,
+    needsLogin: !isLoggedIn,
     login,
     logout,
     refresh,

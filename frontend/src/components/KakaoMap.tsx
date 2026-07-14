@@ -12,8 +12,18 @@ export interface KakaoMapHandle {
   getLevel: () => number | null;
 }
 
+export interface KakaoMapPolyline {
+  id: string;
+  points: Array<{ lat: number; lng: number }>;
+  strokeColor?: string;
+  strokeWeight?: number;
+  strokeOpacity?: number;
+}
+
 interface KakaoMapProps {
   markers?: KakaoMapMarker[];
+  /** 출발지→후보 경로선 (카카오 길찾기 폴리라인). ENABLE_DEPARTURE_ROUTE_LINES 참고 */
+  polylines?: KakaoMapPolyline[];
   center?: { lat: number; lng: number };
   level?: number;
   height?: number | string;
@@ -33,6 +43,7 @@ interface KakaoMapProps {
 
 export function KakaoMap({
   markers = [],
+  polylines = [],
   center,
   level = 5,
   height = 400,
@@ -51,6 +62,7 @@ export function KakaoMap({
   const mapRef = useRef<unknown>(null);
   const clustererRef = useRef<unknown>(null);
   const markerInstancesRef = useRef<unknown[]>([]);
+  const polylineInstancesRef = useRef<unknown[]>([]);
   const initialLevelRef = useRef(level);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -91,6 +103,10 @@ export function KakaoMap({
         (m as { setMap: (v: null) => void }).setMap(null);
       });
       markerInstancesRef.current = [];
+      polylineInstancesRef.current.forEach((p) => {
+        (p as { setMap: (v: null) => void }).setMap(null);
+      });
+      polylineInstancesRef.current = [];
       if (clustererRef.current) {
         (clustererRef.current as { clear: () => void }).clear();
         clustererRef.current = null;
@@ -185,6 +201,37 @@ export function KakaoMap({
     fitBounds,
     recenterOnSelect,
   ]);
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.kakao) return;
+
+    const kakao = window.kakao.maps;
+    const map = mapRef.current;
+
+    polylineInstancesRef.current.forEach((p) => {
+      (p as { setMap: (v: null) => void }).setMap(null);
+    });
+    polylineInstancesRef.current = [];
+
+    if (polylines.length === 0) return;
+
+    const createdPolylines = polylines
+      .filter((line) => line.points.length >= 2)
+      .map((line) => {
+        const path = line.points.map((pt) => new kakao.LatLng(pt.lat, pt.lng));
+        const polyline = new kakao.Polyline({
+          path,
+          strokeWeight: line.strokeWeight ?? 4,
+          strokeColor: line.strokeColor ?? "#6366F1",
+          strokeOpacity: line.strokeOpacity ?? 0.75,
+          strokeStyle: "solid",
+        });
+        polyline.setMap(map);
+        return polyline;
+      });
+
+    polylineInstancesRef.current = createdPolylines;
+  }, [ready, polylines]);
 
   useEffect(() => {
     if (!ready || !mapRef.current) return;
@@ -283,6 +330,9 @@ export function KakaoMap({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
           <p className="font-medium text-foreground">지도를 불러올 수 없습니다</p>
           <p>잠시 후 다시 시도해 주세요.</p>
+          {process.env.NODE_ENV === "development" && (
+            <p className="mt-1 max-w-sm text-xs text-accent">{error}</p>
+          )}
         </div>
       )}
     </div>

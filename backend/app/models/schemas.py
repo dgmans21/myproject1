@@ -33,6 +33,14 @@ class RoomStatus(str, Enum):
     ARCHIVED = "ARCHIVED"
 
 
+class MeetingPurpose(str, Enum):
+    MAJOR_PRESENTATION = "MAJOR_PRESENTATION"
+    MONTHLY = "MONTHLY"
+    CASUAL = "CASUAL"
+    FLASH = "FLASH"
+    OTHER = "OTHER"
+
+
 class AppointmentStatus(str, Enum):
     draft = "draft"
     date_voting = "date_voting"
@@ -98,6 +106,11 @@ class ProfileUpdate(BaseModel):
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
+    clear_current_departure: bool | None = None
+    current_departure_label: str | None = None
+    current_departure_address: str | None = None
+    current_departure_lat: float | None = None
+    current_departure_lng: float | None = None
     selected_title_id: int | None = None
     selected_social_title_id: int | None = None
     mbti_types: list[str] | None = Field(default=None, max_length=2)
@@ -158,6 +171,11 @@ class ProfileResponse(BaseModel):
     home_address: str | None = None
     home_lat: float | None = None
     home_lng: float | None = None
+    current_departure_label: str | None = None
+    current_departure_address: str | None = None
+    current_departure_lat: float | None = None
+    current_departure_lng: float | None = None
+    current_departure_set_at: datetime | None = None
     trust_score: int = 0
     social_points: int = 0
     badge_tier: ProfileBadgeTier = ProfileBadgeTier.NONE
@@ -200,16 +218,21 @@ class RoomCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
     purpose: str | None = None
+    meeting_purpose: MeetingPurpose | None = None
+    meeting_purpose_custom: str | None = None
     room_type: RoomType = RoomType.ONE_TIME
     """임시방(ONE_TIME)일 때 필수. 날짜 단위 만료(해당일 23:59 UTC)."""
     expire_date: date | None = None
     accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    join_password: str | None = Field(default=None, min_length=4, max_length=128)
 
 
 class RoomUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = None
     purpose: str | None = None
+    meeting_purpose: MeetingPurpose | None = None
+    meeting_purpose_custom: str | None = None
     expire_date: date | None = None
     accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
@@ -226,12 +249,60 @@ class RoomResponse(BaseModel):
     room_type: RoomType
     room_status: RoomStatus = RoomStatus.ACTIVE
     purpose: str | None = None
+    meeting_purpose: MeetingPurpose | None = None
+    meeting_purpose_custom: str | None = None
     is_fixed: bool = False
     expire_at: str | None = None
     last_activity_at: str | None = None
     accent_color: str | None = None
     member_count: int = 0
     created_at: str
+    requires_join_password: bool = False
+    is_me_owner: bool = False
+
+
+class RoomInvitationItem(BaseModel):
+    id: UUID
+    room_id: UUID
+    room_name: str
+    inviter_display_name: str
+    status: str
+
+
+class FriendSummary(BaseModel):
+    user_id: UUID
+    display_name: str
+
+
+class InviteLinkInfo(BaseModel):
+    room_id: UUID
+    token: str
+    expires_at: str
+    url: str
+
+
+class InviteTokenPreview(BaseModel):
+    room_id: UUID
+    room_name: str
+    expires_at: str
+    expired: bool
+    is_member: bool
+    requires_join_password: bool
+
+
+class JoinPreview(BaseModel):
+    room_id: UUID
+    room_name: str
+    requires_join_password: bool
+    is_member: bool
+
+
+class JoinPasswordUpdate(BaseModel):
+    password: str | None = Field(default=None, max_length=128)
+
+
+class JoinWithPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class RoomInviteRequest(BaseModel):
@@ -294,6 +365,7 @@ class AppointmentResponse(BaseModel):
     status: AppointmentStatus
     confirmed_date: date | None = None
     confirmed_time: time | None = None
+    confirmed_place_id: UUID | None = None
     created_at: str
 
 
@@ -431,6 +503,17 @@ class TravelTimeResponse(BaseModel):
     route_summary: str
 
 
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
+class TravelRouteResponse(TravelTimeResponse):
+    """길찾기 결과 + 지도 폴리라인 (카카오모빌리티 directions)"""
+
+    polyline: list[RoutePoint] = Field(default_factory=list)
+
+
 class DepartureStatus(str, Enum):
     NOT_DEPARTED = "NOT_DEPARTED"
     EN_ROUTE = "EN_ROUTE"
@@ -539,3 +622,84 @@ class MeetingMemoryListItem(BaseModel):
     my_memo_preview: str | None = None
     my_memo_updated_at: datetime | None = None
     memo_count: int = 0
+
+
+class FriendCreate(BaseModel):
+    friend_id: UUID
+
+
+class ProfileSearchHit(BaseModel):
+    user_id: UUID
+    display_name: str
+    residence: str | None = None
+
+
+class HostTransferRequest(BaseModel):
+    target_user_id: UUID
+
+
+class HostTransferRespond(BaseModel):
+    accept: bool
+
+
+class HostTransferCandidate(BaseModel):
+    user_id: UUID
+    display_name: str
+
+
+class HostTransferPendingInfo(BaseModel):
+    from_user_id: UUID
+    from_display_name: str
+    to_user_id: UUID
+    to_display_name: str
+    is_for_me: bool
+
+
+class HostTransferStatusResponse(BaseModel):
+    owner_user_id: UUID | None = None
+    owner_display_name: str | None = None
+    is_me_owner: bool = False
+    pending: HostTransferPendingInfo | None = None
+    transfer_candidates: list[HostTransferCandidate] = []
+
+
+class TeamScheduleDayMemoResponse(BaseModel):
+    id: str
+    room_id: str
+    user_id: str
+    display_name: str
+    schedule_date: str
+    memo: str
+    updated_at: datetime
+
+
+class TeamScheduleMemoUpsert(BaseModel):
+    schedule_date: date
+    memo: str = Field(default="", max_length=2000)
+
+
+class TeamScheduleMemberWeek(BaseModel):
+    user_id: str
+    display_name: str
+    is_me: bool = False
+    slots: dict[str, bool] = {}
+    other_times: str = ""
+
+
+class TeamScheduleWeekBoard(BaseModel):
+    room_id: str
+    week_start: str
+    members: list[TeamScheduleMemberWeek]
+    slot_counts: dict[str, int] = {}
+
+
+class TeamScheduleWeekSave(BaseModel):
+    week_start: date
+    slots: dict[str, bool] = {}
+    other_times: str = Field(default="", max_length=2000)
+
+
+class TeamMilestoneItem(BaseModel):
+    id: str
+    label: str
+    done: bool = False

@@ -11,6 +11,7 @@ import { ProfileSummaryCard } from "@/components/ProfileSummaryCard";
 import { ProfileDecorPanel } from "@/components/ProfileDecorPanel";
 import { ProfileInterestsPanel } from "@/components/ProfileInterestsPanel";
 import { ProfileLocationsPanel } from "@/components/ProfileLocationsPanel";
+import { ProfilePasswordPanel } from "@/components/ProfilePasswordPanel";
 import { api, Profile, RecommenderTitle, SocialPointTitle, toPublicProfileView } from "@/lib/api";
 import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { MBTI_OPTIONS } from "@/lib/mbti";
@@ -18,7 +19,7 @@ import { isAdmin } from "@/lib/permissions";
 import { PROFILE_STATUS_MAX_LENGTH } from "@/lib/profile-status";
 import { useAuthSession } from "@/lib/use-auth-session";
 import Link from "next/link";
-import { Lock, LogIn } from "lucide-react";
+import { Lock, LogIn, Users } from "lucide-react";
 
 function ProfileGuestGate({ onLogin }: { onLogin: () => void }) {
   return (
@@ -157,6 +158,16 @@ function ProfileMemberContent() {
           showRankingLink
         />
 
+        <div className="mt-4">
+          <Link
+            href="/friends"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-border"
+          >
+            <Users className="h-4 w-4 text-primary" />
+            친구 관리
+          </Link>
+        </div>
+
         <div className="mt-6 flex gap-2 border-b border-border overflow-x-auto">
           {([
             ["info", "프로필"],
@@ -211,6 +222,7 @@ function ProfileMemberContent() {
               profile={profile}
               onProfileUpdated={(p) => setProfile(p)}
             />
+            <ProfilePasswordPanel />
             <Card className="mt-6">
               <CardTitle className="text-base">한 줄 소개 · 상태</CardTitle>
               <CardDescription className="mt-1">

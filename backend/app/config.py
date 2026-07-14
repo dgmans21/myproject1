@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     kakao_rest_api_key: str = ""
     analytics_ip_salt: str = "dev-analytics-salt"
     cors_origins: str = "http://localhost:3000"
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -2,15 +2,21 @@
 
 import { useState } from "react";
 import { AUTH_SOCIAL_PROVIDERS, type AuthSocialProvider } from "@/lib/auth-ui-constants";
+import { startSocialLogin } from "@/lib/auth-oauth";
+import { toAuthErrorMessage } from "@/lib/auth-error-messages";
 import { cn } from "@/lib/utils";
 
 interface AuthSocialButtonsProps {
   disabled?: boolean;
-  /** Supabase 연동 전 UI 미리보기용 */
   onProviderClick?: (provider: AuthSocialProvider) => void;
+  onError?: (message: string) => void;
 }
 
-export function AuthSocialButtons({ disabled, onProviderClick }: AuthSocialButtonsProps) {
+export function AuthSocialButtons({
+  disabled,
+  onProviderClick,
+  onError,
+}: AuthSocialButtonsProps) {
   const [pending, setPending] = useState<AuthSocialProvider | null>(null);
 
   const handleClick = async (provider: AuthSocialProvider) => {
@@ -19,12 +25,14 @@ export function AuthSocialButtons({ disabled, onProviderClick }: AuthSocialButto
     try {
       if (onProviderClick) {
         onProviderClick(provider);
-      } else {
-        // TODO: supabase.auth.signInWithOAuth({ provider })
-        await new Promise((r) => setTimeout(r, 400));
-        alert(
-          `${AUTH_SOCIAL_PROVIDERS.find((p) => p.id === provider)?.label}\n\nSupabase Auth 연동 후 동작합니다.`
-        );
+        return;
+      }
+      await startSocialLogin(provider);
+    } catch (err: unknown) {
+      const message = toAuthErrorMessage(err, "oauth");
+      onError?.(message);
+      if (!onError) {
+        alert(message);
       }
     } finally {
       setPending(null);
@@ -85,11 +93,9 @@ function SocialIcon({ provider }: { provider: AuthSocialProvider }) {
       </svg>
     );
   }
-  // naver 보류
-  // return (
-  //   <span className="text-base font-bold leading-none" aria-hidden>
-  //     N
-  //   </span>
-  // );
-  return null;
+  return (
+    <span className="text-base font-bold leading-none" aria-hidden>
+      N
+    </span>
+  );
 }

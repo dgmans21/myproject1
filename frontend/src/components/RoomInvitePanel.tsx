@@ -12,7 +12,7 @@ interface RoomInvitePanelProps {
   roomId: string;
 }
 
-/** 방장: 친구 초대 + 입장 비밀번호 설정 (mock) */
+/** 방장: 친구 초대 + 입장 비밀번호 설정 */
 export function RoomInvitePanel({ roomId }: RoomInvitePanelProps) {
   const [hostStatus, setHostStatus] = useState<HostTransferStatus | null>(null);
   const [candidates, setCandidates] = useState<FriendSummary[]>([]);

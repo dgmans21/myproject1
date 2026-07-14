@@ -16,7 +16,7 @@ export type DepartureOrigin = {
   lat: number;
   lng: number;
   name: string;
-  source: "home" | "saved" | "session";
+  source: "home" | "saved" | "current";
   id?: string;
 };
 
@@ -24,14 +24,26 @@ type DepartureOriginContextValue = {
   activeOrigin: DepartureOrigin | null;
   home: DepartureOrigin | null;
   savedLocations: SavedLocation[];
-  sessionOrigin: DepartureOrigin | null;
+  currentDeparture: DepartureOrigin | null;
   loading: boolean;
   pickerOpen: boolean;
   openPicker: () => void;
   closePicker: () => void;
-  selectHome: () => void;
-  selectSaved: (loc: SavedLocation) => void;
-  setSessionOrigin: (origin: DepartureOrigin | null) => void;
+  selectHome: () => Promise<void>;
+  selectSaved: (loc: SavedLocation) => Promise<void>;
+  setCurrentDeparture: (origin: {
+    lat: number;
+    lng: number;
+    name: string;
+    address?: string;
+  }) => Promise<void>;
+  clearCurrentDeparture: () => Promise<void>;
+  /** 집 주소 저장 후 출발지로 선택 */
+  saveHomeAddress: (data: {
+    address: string;
+    lat: number;
+    lng: number;
+  }) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -44,6 +56,21 @@ function homeOriginFromProfile(profile: Profile): DepartureOrigin | null {
     lng: profile.home_lng,
     name: profile.home_address || "집",
     source: "home",
+  };
+}
+
+function currentDepartureFromProfile(profile: Profile): DepartureOrigin | null {
+  if (profile.current_departure_lat == null || profile.current_departure_lng == null) {
+    return null;
+  }
+  return {
+    lat: profile.current_departure_lat,
+    lng: profile.current_departure_lng,
+    name:
+      profile.current_departure_label ||
+      profile.current_departure_address ||
+      "현재 출발지",
+    source: "current",
   };
 }
 
@@ -64,11 +91,17 @@ function defaultOrigin(
   return home;
 }
 
+function coordsMatch(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): boolean {
+  return Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lng - b.lng) < 1e-5;
+}
+
 export function DepartureOriginProvider({ children }: { children: React.ReactNode }) {
   const { isLoading, needsLogin } = useAuthSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
-  const [sessionOrigin, setSessionOrigin] = useState<DepartureOrigin | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -105,54 +138,108 @@ export function DepartureOriginProvider({ children }: { children: React.ReactNod
     [profile]
   );
 
+  const currentDeparture = useMemo(
+    () => (profile ? currentDepartureFromProfile(profile) : null),
+    [profile]
+  );
+
   const defaultFromServer = useMemo(
     () => defaultOrigin(home, savedLocations),
     [home, savedLocations]
   );
 
-  const activeOrigin = sessionOrigin ?? defaultFromServer;
+  const activeOrigin = currentDeparture ?? defaultFromServer;
 
-  const selectHome = useCallback(() => {
-    if (!home) return;
-    setSessionOrigin(home);
-    setPickerOpen(false);
-  }, [home]);
-
-  const selectSaved = useCallback((loc: SavedLocation) => {
-    setSessionOrigin({
-      lat: loc.lat,
-      lng: loc.lng,
-      name: loc.label,
-      source: "saved",
-      id: loc.id,
-    });
-    setPickerOpen(false);
+  const patchProfile = useCallback(async (data: Partial<Profile>) => {
+    const updated = await api.profiles.update(data);
+    setProfile(updated);
   }, []);
+
+  const clearCurrentDeparture = useCallback(async () => {
+    await patchProfile({ clear_current_departure: true } as Partial<Profile>);
+    setPickerOpen(false);
+  }, [patchProfile]);
+
+  const setCurrentDeparture = useCallback(
+    async (origin: { lat: number; lng: number; name: string; address?: string }) => {
+      await patchProfile({
+        current_departure_label: origin.name,
+        current_departure_address: origin.address,
+        current_departure_lat: origin.lat,
+        current_departure_lng: origin.lng,
+      } as Partial<Profile>);
+      setPickerOpen(false);
+    },
+    [patchProfile]
+  );
+
+  const selectHome = useCallback(async () => {
+    if (!home) return;
+    await setCurrentDeparture({
+      lat: home.lat,
+      lng: home.lng,
+      name: home.name,
+    });
+  }, [home, setCurrentDeparture]);
+
+  const selectSaved = useCallback(
+    async (loc: SavedLocation) => {
+      await setCurrentDeparture({
+        lat: loc.lat,
+        lng: loc.lng,
+        name: loc.label,
+        address: loc.address,
+      });
+    },
+    [setCurrentDeparture]
+  );
+
+  const saveHomeAddress = useCallback(
+    async (data: { address: string; lat: number; lng: number }) => {
+      await patchProfile({
+        home_address: data.address,
+        home_lat: data.lat,
+        home_lng: data.lng,
+      });
+      await setCurrentDeparture({
+        lat: data.lat,
+        lng: data.lng,
+        name: data.address,
+        address: data.address,
+      });
+    },
+    [patchProfile, setCurrentDeparture]
+  );
 
   const value = useMemo<DepartureOriginContextValue>(
     () => ({
       activeOrigin,
       home,
       savedLocations,
-      sessionOrigin,
+      currentDeparture,
       loading,
       pickerOpen,
       openPicker: () => setPickerOpen(true),
       closePicker: () => setPickerOpen(false),
       selectHome,
       selectSaved,
-      setSessionOrigin,
+      setCurrentDeparture,
+      clearCurrentDeparture,
+      saveHomeAddress,
       refresh,
     }),
     [
       activeOrigin,
       home,
       savedLocations,
-      sessionOrigin,
+      currentDeparture,
       loading,
       pickerOpen,
       selectHome,
       selectSaved,
+      setCurrentDeparture,
+      clearCurrentDeparture,
+      saveHomeAddress,
       refresh,
     ]
   );
@@ -185,4 +272,15 @@ export function resolveTravelOrigin(
     lng: ctx.activeOrigin.lng,
     name: ctx.activeOrigin.name,
   };
+}
+
+export function isActiveCurrentDeparture(
+  active: DepartureOrigin | null,
+  current: DepartureOrigin | null,
+  defaultOriginVal: DepartureOrigin | null
+): boolean {
+  if (!active || !current) return false;
+  if (!coordsMatch(active, current)) return false;
+  if (defaultOriginVal && coordsMatch(current, defaultOriginVal)) return false;
+  return true;
 }

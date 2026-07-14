@@ -33,6 +33,7 @@ import {
   readPlaceRegisterDraft,
 } from "@/lib/place-register-draft";
 import { isGuestSession } from "@/lib/auth-session";
+import { scrollFormIntoView } from "@/lib/mobile-form-scroll";
 import type { WriteAction } from "@/lib/permissions";
 import { MapPin, Star, Plus, Award, ThumbsUp, ThumbsDown, Map, MessageSquare, Search, X, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -159,9 +160,7 @@ function PlacesPageContent() {
   );
 
   const scrollToAddForm = useCallback(() => {
-    requestAnimationFrame(() => {
-      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    scrollFormIntoView(addFormRef.current);
   }, []);
 
   const openAddForm = useCallback(
@@ -184,7 +183,13 @@ function PlacesPageContent() {
   useEffect(() => {
     if (searchParams.get(PLACE_REGISTER_ADD_QUERY) !== "1") return;
 
-    router.replace("/places", { scroll: false });
+    const roomId = searchParams.get("roomId");
+    const returnPath = searchParams.get("return");
+    const replaceQ = new URLSearchParams();
+    if (roomId) replaceQ.set("roomId", roomId);
+    if (returnPath) replaceQ.set("return", returnPath);
+    const replaceUrl = replaceQ.toString() ? `/places?${replaceQ.toString()}` : "/places";
+    router.replace(replaceUrl, { scroll: false });
 
     if (isGuestSession()) {
       setGuestAction("review_write");
@@ -199,6 +204,8 @@ function PlacesPageContent() {
     if (!name || !address || !kakaoPlaceId || matchedExistingPlace) return;
     const lat = coords?.lat ?? 37.5665;
     const lng = coords?.lng ?? 126.978;
+    const roomId = searchParams.get("roomId");
+    const returnPath = searchParams.get("return");
     try {
       const place = await api.places.create({
         name,
@@ -207,10 +214,16 @@ function PlacesPageContent() {
         lng,
         category: category || undefined,
         kakao_place_id: kakaoPlaceId,
+        room_id: roomId || undefined,
       });
       setPlaces((prev) => [place, ...prev]);
       setShowAdd(false);
       resetAddForm();
+      if (returnPath && roomId) {
+        const sep = returnPath.includes("?") ? "&" : "?";
+        router.push(`${returnPath}${sep}placeId=${encodeURIComponent(place.id)}`);
+        return;
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "등록 실패");
     }
@@ -421,8 +434,8 @@ function PlacesPageContent() {
               </div>
             )}
 
-            {coords && (
-              <div className="mt-4">
+            <div className="mt-4" style={{ minHeight: PLACE_REGISTER_MAP_HEIGHT }}>
+              {coords ? (
                 <KakaoMap
                   markers={[
                     {
@@ -436,9 +449,17 @@ function PlacesPageContent() {
                   level={3}
                   height={PLACE_REGISTER_MAP_HEIGHT}
                   useClusterer={false}
+                  recenterOnSelect={false}
                 />
-              </div>
-            )}
+              ) : (
+                <div
+                  className="flex items-center justify-center rounded-2xl border border-dashed border-border bg-surface px-4 text-center text-sm text-muted"
+                  style={{ height: PLACE_REGISTER_MAP_HEIGHT }}
+                >
+                  검색 결과에서 장소를 선택하면 지도 미리보기가 표시됩니다
+                </div>
+              )}
+            </div>
             <Button
               className="mt-4"
               onClick={() => void handleAdd()}

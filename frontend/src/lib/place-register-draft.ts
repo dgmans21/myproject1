@@ -35,9 +35,15 @@ export function clearPlaceRegisterDraft(): void {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
-export function placeRegisterHref(poi?: KakaoPoiResult): string {
+export function placeRegisterHref(
+  poi?: KakaoPoiResult,
+  opts?: { roomId?: string; returnPath?: string }
+): string {
   if (poi) savePlaceRegisterDraft(poi);
-  return `/places?${PLACE_REGISTER_ADD_QUERY}=1`;
+  const q = new URLSearchParams({ [PLACE_REGISTER_ADD_QUERY]: "1" });
+  if (opts?.roomId) q.set("roomId", opts.roomId);
+  if (opts?.returnPath) q.set("return", opts.returnPath);
+  return `/places?${q.toString()}`;
 }
 
 export type ApplyPoiToRegisterFormArgs = {

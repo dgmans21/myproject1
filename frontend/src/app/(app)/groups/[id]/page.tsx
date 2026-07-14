@@ -20,7 +20,9 @@ import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { MeetingPurposeSelector } from "@/components/MeetingPurposeSelector";
 import { TeamScheduleRoomPanel } from "@/components/TeamScheduleRoomPanel";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
+import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { isGuestSession } from "@/lib/auth-session";
+import { scrollFormIntoView } from "@/lib/mobile-form-scroll";
 import { useRoomStore } from "@/stores/room-store";
 import { Plus, Calendar, ArrowLeft, Crown } from "lucide-react";
 import Link from "next/link";
@@ -54,10 +56,7 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     if (!showCreate) return;
-    requestAnimationFrame(() => {
-      createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      document.getElementById("apt-create-title")?.focus();
-    });
+    scrollFormIntoView(createFormRef.current, { focusSelector: "#apt-create-title" });
   }, [showCreate]);
 
   const heatmapData = roomHeatmap.map((d) => ({
@@ -100,8 +99,8 @@ export default function GroupDetailPage() {
         </Link>
 
         {room && (
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 {room.accent_color && (
                   <span
@@ -110,7 +109,7 @@ export default function GroupDetailPage() {
                     aria-hidden
                   />
                 )}
-                <h1 className="text-2xl font-bold text-foreground">{room.name}</h1>
+                <h1 className="text-xl font-bold text-foreground sm:text-2xl">{room.name}</h1>
                 <Badge
                   variant={
                     room.room_type === "TEAM_SCHEDULE"
@@ -123,11 +122,19 @@ export default function GroupDetailPage() {
                   {ROOM_TYPE_LABELS[room.room_type]}
                 </Badge>
               </div>
-              {room.purpose && <p className="mt-1 text-muted">{room.purpose}</p>}
+              {(() => {
+                const label =
+                  meetingPurposeLabel({
+                    purpose: room.meeting_purpose,
+                    purpose_custom: room.meeting_purpose_custom,
+                  }) ?? room.purpose;
+                return label ? <p className="mt-1 text-sm text-muted">{label}</p> : null;
+              })()}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
               {!isTeamScheduleRoom && (
                 <Button
+                  className="min-w-0 flex-1 sm:flex-none"
                   onClick={() => {
                     if (isGuestSession()) setGuestPrompt(true);
                     else setShowCreate((open) => !open);
@@ -161,11 +168,20 @@ export default function GroupDetailPage() {
                   placeholder="팀 회식"
                 />
                 <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleCreate} disabled={creating || !title.trim()}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={handleCreate}
+                    disabled={creating || !title.trim()}
+                  >
                     약속 생성 & 1차 투표 시작
                   </Button>
-                  <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={creating}>
+                  <Button
+                    className="w-full sm:w-auto"
+                    variant="ghost"
+                    onClick={() => setShowCreate(false)}
+                    disabled={creating}
+                  >
                     취소
                   </Button>
                 </div>
@@ -199,7 +215,7 @@ export default function GroupDetailPage() {
         </div>
 
         <RoomInvitePanel roomId={id!} />
-        <InviteLinkPanel roomId={id!} isOwner={Boolean(room?.is_me_owner)} />
+        <InviteLinkPanel roomId={id!} />
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Card>
@@ -256,12 +272,14 @@ export default function GroupDetailPage() {
             appointments.map((apt) => (
               <Link key={apt.id} href={`/groups/${id}/appointments/${apt.id}`}>
                 <Card hover>
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <CardTitle>{apt.title}</CardTitle>
                       {apt.description && <CardDescription>{apt.description}</CardDescription>}
                     </div>
-                    <Badge variant={
+                    <Badge
+                      className="w-fit shrink-0"
+                      variant={
                       apt.status === "confirmed" ? "accent" :
                       apt.status === "date_voting" ? "primary" :
                       apt.status === "time_voting" ? "warm" : "default"

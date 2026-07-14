@@ -1,19 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toAuthErrorMessage } from "@/lib/auth-error-messages";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      if (!cancelled) {
+        setHasSession(Boolean(data.session));
+        setChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,15 +48,41 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      // TODO: supabase.auth.updateUser({ password }) — 이메일 링크 콜백 세션 필요
-      await new Promise((r) => setTimeout(r, 500));
-      router.push("/?reset=ok");
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      router.push("/dashboard");
+      router.refresh();
     } catch (err: unknown) {
       setError(toAuthErrorMessage(err, "reset-password"));
     } finally {
       setLoading(false);
     }
   };
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+        <p className="text-muted">확인 중…</p>
+      </div>
+    );
+  }
+
+  if (!hasSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+        <AuthShell
+          title="세션이 없습니다"
+          description="비밀번호 재설정은 메일 링크로 들어온 경우에만 가능합니다."
+          backHref="/auth/forgot-password"
+        >
+          <Link href="/auth/forgot-password">
+            <Button className="w-full">재설정 링크 다시 받기</Button>
+          </Link>
+        </AuthShell>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">

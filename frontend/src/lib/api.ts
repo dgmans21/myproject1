@@ -928,11 +928,34 @@ function assertRoomMember(roomId: string) {
   }
 }
 
+let mockFriendsState = MOCK_FRIENDS.map((f) => ({ ...f }));
+
 const mockApi = {
   friends: {
     list: async () => {
       await delay();
-      return MOCK_FRIENDS.filter((f) => f.user_id !== mockProfile.id);
+      return mockFriendsState.filter((f) => f.user_id !== mockProfile.id);
+    },
+    add: async (friendId: string) => {
+      await delay();
+      if (friendId === mockProfile.id) {
+        throw new Error("본인은 친구로 추가할 수 없습니다");
+      }
+      const profile = getProfileById(friendId);
+      if (!profile) throw new Error("사용자를 찾을 수 없습니다");
+      if (mockFriendsState.some((f) => f.user_id === friendId)) {
+        throw new Error("이미 친구로 등록된 사용자입니다");
+      }
+      const entry = { user_id: friendId, display_name: profile.display_name };
+      mockFriendsState.push(entry);
+      return entry;
+    },
+    remove: async (friendId: string) => {
+      await delay();
+      const idx = mockFriendsState.findIndex((f) => f.user_id === friendId);
+      if (idx < 0) throw new Error("친구 관계를 찾을 수 없습니다");
+      mockFriendsState.splice(idx, 1);
+      return { ok: true };
     },
   },
   profiles: {
@@ -969,8 +992,15 @@ const mockApi = {
       if (data.mbti_types && data.mbti_types.length > 2) {
         throw new Error("MBTI는 최대 2개까지 선택할 수 있습니다");
       }
-      const { profile_decor, status_message, ...rest } = data;
+      const { profile_decor, status_message, clear_current_departure, ...rest } = data;
       mockProfile = { ...mockProfile, ...rest };
+      if (clear_current_departure) {
+        mockProfile.current_departure_label = undefined;
+        mockProfile.current_departure_address = undefined;
+        mockProfile.current_departure_lat = undefined;
+        mockProfile.current_departure_lng = undefined;
+        mockProfile.current_departure_set_at = undefined;
+      }
       if (rest.home_address !== undefined && rest.home_address) {
         const derived = deriveResidenceFromAddress(rest.home_address);
         if (derived) mockProfile.residence = derived;
@@ -1001,6 +1031,24 @@ const mockApi = {
     attendanceHeatmap: async () => {
       await delay();
       return MOCK_HEATMAP;
+    },
+    search: async (q: string) => {
+      await delay();
+      const term = q.trim().toLowerCase();
+      if (!term) return [];
+      const friendIds = new Set(mockFriendsState.map((f) => f.user_id));
+      return Object.values(mockOtherProfiles)
+        .filter(
+          (p) =>
+            p.id !== mockProfile.id &&
+            !friendIds.has(p.id) &&
+            p.display_name.toLowerCase().includes(term)
+        )
+        .map((p) => ({
+          user_id: p.id,
+          display_name: p.display_name,
+          residence: p.residence,
+        }));
     },
     verifySecurity: async (_pin: string) => {
       await delay();
@@ -1806,6 +1854,19 @@ const mockApi = {
         route_summary: `약 ${25 + Math.floor(Math.random() * 20)}분 · 데모 경로`,
       };
     },
+    travelRoute: async (req: TravelTimeRequest) => {
+      await delay();
+      const duration = 25 + Math.floor(Math.random() * 20);
+      return {
+        duration_minutes: duration,
+        distance_meters: 8500 + Math.floor(Math.random() * 5000),
+        route_summary: `약 ${duration}분 · 데모 경로`,
+        polyline: [
+          { lat: req.origin_lat, lng: req.origin_lng },
+          { lat: req.dest_lat, lng: req.dest_lng },
+        ],
+      };
+    },
   },
   analytics: {
     recordVisit: async (data: {
@@ -1915,6 +1976,13 @@ export interface Profile {
   home_address?: string;
   home_lat?: number;
   home_lng?: number;
+  current_departure_label?: string;
+  current_departure_address?: string;
+  current_departure_lat?: number;
+  current_departure_lng?: number;
+  current_departure_set_at?: string;
+  /** PATCH 전용 — true 시 current_departure_* 초기화 */
+  clear_current_departure?: boolean;
   trust_score: number;
   social_points: number;
   badge_tier:
@@ -1972,6 +2040,8 @@ export interface Room {
   room_type: "ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE";
   room_status: "ACTIVE" | "ARCHIVED";
   purpose?: string;
+  meeting_purpose?: import("./meeting-purpose").MeetingPurposeId;
+  meeting_purpose_custom?: string;
   is_fixed: boolean;
   expire_at?: string;
   last_activity_at?: string;
@@ -2006,6 +2076,8 @@ export interface RoomCreate {
   name: string;
   description?: string;
   purpose?: string;
+  meeting_purpose?: import("./meeting-purpose").MeetingPurposeId;
+  meeting_purpose_custom?: string;
   room_type?: "ONE_TIME" | "REGULAR" | "TEAM_SCHEDULE";
   expire_date?: string;
   accent_color?: string;
@@ -2031,6 +2103,12 @@ export interface RoomInvitationItem {
 export interface FriendSummary {
   user_id: string;
   display_name: string;
+}
+
+export interface ProfileSearchHit {
+  user_id: string;
+  display_name: string;
+  residence?: string;
 }
 
 export interface RoomActivityDay {
@@ -2093,6 +2171,10 @@ export interface TravelTimeResponse {
   duration_minutes: number;
   distance_meters: number;
   route_summary: string;
+}
+
+export interface TravelRouteResponse extends TravelTimeResponse {
+  polyline: Array<{ lat: number; lng: number }>;
 }
 
 export interface MeetingMemoryListItem {

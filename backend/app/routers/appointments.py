@@ -26,6 +26,7 @@ from app.models.schemas import (
 )
 from app.services.briefing import (
     build_briefing,
+    delete_comment,
     post_comment,
     record_confirm_travel_logs,
     set_departure_status,
@@ -464,6 +465,21 @@ async def add_appointment_comment(
     if apt["status"] != AppointmentStatus.confirmed.value:
         raise HTTPException(status_code=400, detail="확정된 약속에만 댓글을 남길 수 있습니다")
     return await post_comment(sb, str(appointment_id), user_id, body)
+
+
+@router.delete("/{appointment_id}/comments/{comment_id}", status_code=200)
+async def remove_appointment_comment(
+    appointment_id: UUID,
+    comment_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+):
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_member(sb, apt["room_id"], user_id)
+    if apt["status"] != AppointmentStatus.confirmed.value:
+        raise HTTPException(status_code=400, detail="확정된 약속의 댓글만 삭제할 수 있습니다")
+    delete_comment(sb, str(appointment_id), str(comment_id), user_id)
+    return {"ok": True}
 
 
 @router.patch("/{appointment_id}/departure-status")

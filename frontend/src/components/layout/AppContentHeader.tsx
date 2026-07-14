@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu, PanelLeft } from "lucide-react";
+import { LogIn, LogOut, Menu, PanelLeft } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { getPageMeta } from "@/lib/app-page-meta";
 
 type AppContentHeaderProps = {
@@ -8,6 +9,10 @@ type AppContentHeaderProps = {
   onOpenMobileMenu: () => void;
   onExpandNavPanel?: () => void;
   navPanelCollapsed?: boolean;
+  isGuest: boolean;
+  isLoggedIn: boolean;
+  onLogin: () => void;
+  onLogout: () => void | Promise<void>;
 };
 
 export function AppContentHeader({
@@ -15,6 +20,10 @@ export function AppContentHeader({
   onOpenMobileMenu,
   onExpandNavPanel,
   navPanelCollapsed,
+  isGuest,
+  isLoggedIn,
+  onLogin,
+  onLogout,
 }: AppContentHeaderProps) {
   const meta = getPageMeta(pathname);
 
@@ -46,6 +55,18 @@ export function AppContentHeader({
           <p className="truncate text-xs text-muted">{meta.description}</p>
         )}
       </div>
+
+      {isLoggedIn && !isGuest ? (
+        <Button variant="ghost" size="sm" onClick={() => void onLogout()}>
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">로그아웃</span>
+        </Button>
+      ) : (
+        <Button size="sm" onClick={onLogin}>
+          <LogIn className="h-4 w-4" />
+          <span className="hidden sm:inline">로그인</span>
+        </Button>
+      )}
     </header>
   );
 }

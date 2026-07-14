@@ -9,6 +9,8 @@ import { AuthSocialButtons } from "@/components/auth/AuthSocialButtons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toAuthErrorMessage } from "@/lib/auth-error-messages";
+import { createClient } from "@/lib/supabase/client";
+import { authCallbackUrl } from "@/lib/auth-oauth";
 
 function ForgotPasswordContent() {
   const searchParams = useSearchParams();
@@ -23,8 +25,14 @@ function ForgotPasswordContent() {
     setError("");
     setLoading(true);
     try {
-      // TODO: supabase.auth.resetPasswordForEmail(email, { redirectTo })
-      await new Promise((r) => setTimeout(r, 500));
+      const supabase = createClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo: authCallbackUrl("/auth/reset-password"),
+        }
+      );
+      if (resetError) throw resetError;
       setSent(true);
     } catch (err: unknown) {
       setError(toAuthErrorMessage(err, "forgot-password"));
@@ -45,7 +53,7 @@ function ForgotPasswordContent() {
             <strong>{email}</strong>
           </p>
           <p className="mt-2 text-sm text-muted">
-            메일이 보이지 않으면 스팸함을 확인하거나, 소셜 로그인(Google·카카오)으로
+            메일이 보이지 않으면 스팸함을 확인하거나, 소셜 로그인(Google·카카오·네이버)으로
             가입하셨다면 해당 서비스로 다시 로그인해 주세요.
           </p>
         </div>
@@ -86,7 +94,7 @@ function ForgotPasswordContent() {
 
       <div className="mt-6 border-t border-border pt-6">
         <p className="mb-3 text-center text-xs text-muted">소셜 계정으로 가입하셨나요?</p>
-        <AuthSocialButtons disabled={loading} />
+        <AuthSocialButtons disabled={loading} onError={setError} />
       </div>
     </AuthShell>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { Calendar, Clock, MapPin, Users, Vote, ArrowRight } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { Button } from "@/components/ui/Button";
@@ -75,7 +76,9 @@ export default function HomePage() {
             </div>
 
             <div id="auth" className="flex justify-center lg:justify-end">
-              <AuthForm />
+              <Suspense fallback={<div className="text-muted">불러오는 중…</div>}>
+                <AuthForm />
+              </Suspense>
             </div>
           </div>
         </div>

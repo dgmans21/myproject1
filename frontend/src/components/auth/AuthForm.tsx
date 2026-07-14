@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -16,6 +16,7 @@ type AuthMode = "login" | "signup";
 
 export function AuthForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +26,18 @@ export function AuthForm() {
   const [residence, setResidence] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const authError = searchParams.get("auth_error");
+    if (!authError) return;
+    // 네이버 라우트 등에서 이미 한글 메시지를 붙인 경우 그대로 표시
+    setError(
+      /[가-힣]/.test(authError)
+        ? authError
+        : toAuthErrorMessage({ message: authError }, "oauth")
+    );
+    router.replace("/#auth", { scroll: false });
+  }, [searchParams, router]);
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
@@ -98,7 +111,7 @@ export function AuthForm() {
       </p>
 
       <div className="mt-6">
-        <AuthSocialButtons disabled={loading} />
+        <AuthSocialButtons disabled={loading} onError={setError} />
       </div>
 
       <div className="relative my-6">
@@ -202,7 +215,7 @@ export function AuthForm() {
         {mode === "signup" && (
           <p className="text-xs text-muted">
             가입 시 입력한 이메일로 <strong className="text-foreground">인증 메일</strong>이
-            발송됩니다. (Supabase 연동 후 활성화)
+            발송됩니다. 메일 확인 후 로그인해 주세요.
           </p>
         )}
 
@@ -225,6 +238,7 @@ export function AuthForm() {
           onClick={() => {
             setSessionMode("guest");
             router.push("/groups");
+            router.refresh();
           }}
         >
           로그인 없이 둘러보기 (비회원)

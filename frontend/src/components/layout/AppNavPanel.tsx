@@ -76,7 +76,7 @@ export function AppNavPanel({
       {collapsed && (
         <button
           type="button"
-          onClick={onToggleCollapse}
+          onClick={ () => { alert("clicked"); onToggleCollapse(); }}
           className="absolute left-0 top-3 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted shadow-sm hover:text-foreground"
           aria-label="메뉴 패널 펼치기"
         >

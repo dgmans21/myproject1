@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
+import { AddressInputWithDaumSearch } from "@/components/AddressInputWithDaumSearch";
 import { Input } from "@/components/ui/Input";
 import { api, Profile, SavedLocation } from "@/lib/api";
 import { geocodeAddress } from "@/lib/kakao-map";
@@ -142,11 +143,12 @@ export function ProfileLocationsPanel({
           공개 거주지: <strong className="text-foreground">{profile.residence}</strong>
         </p>
         <div className="mt-4 space-y-2">
-          <Input
+          <AddressInputWithDaumSearch
             label="집 주소"
             value={homeQuery}
-            onChange={(e) => setHomeQuery(e.target.value)}
-            placeholder="서울 강남구 …"
+            onChange={setHomeQuery}
+            placeholder="주소 검색 버튼으로 찾아 주세요"
+            manualPlaceholder="서울 강남구 …"
           />
           <Button
             size="sm"
@@ -222,11 +224,12 @@ export function ProfileLocationsPanel({
                   onChange={(e) => setAddDescription(e.target.value.slice(0, 10))}
                   placeholder="지하 1층"
                 />
-                <Input
-                  label="주소 검색"
+                <AddressInputWithDaumSearch
+                  label="주소"
                   value={addQuery}
-                  onChange={(e) => setAddQuery(e.target.value)}
-                  placeholder="주소 입력 후 추가"
+                  onChange={setAddQuery}
+                  placeholder="주소 검색 버튼으로 찾아 주세요"
+                  manualPlaceholder="서울 강남구 …"
                 />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => void addSaved()} disabled={addGeocoding}>

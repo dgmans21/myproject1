@@ -14,8 +14,9 @@ from app.models.schemas import (
     TopRankerPlaceEndorsement,
     TravelTimeRequest,
     TravelTimeResponse,
+    TravelRouteResponse,
 )
-from app.services.kakao import get_travel_time
+from app.services.kakao import get_travel_route, get_travel_time
 from app.services.rating import (
     MAX_FIVE_STAR_TOTAL,
     MAX_FOUR_HALF_STAR_PER_MONTH,
@@ -62,6 +63,65 @@ def _get_existing_rating(sb, user_id: str, place_id: str) -> float | None:
 def _is_admin(sb, user_id: str) -> bool:
     row = sb.table("profiles").select("role").eq("id", user_id).single().execute()
     return bool(row.data and row.data.get("role") == "ADMIN")
+
+
+def _place_row_to_response(
+    sb,
+    p: dict,
+    viewer_id: str | None,
+    endorsements: dict | None = None,
+) -> PlaceResponse:
+    title = None
+    prof = p.get("profiles")
+    if prof and prof.get("selected_title_id"):
+        t = (
+            sb.table("recommender_titles")
+            .select("title")
+            .eq("id", prof["selected_title_id"])
+            .single()
+            .execute()
+        )
+        if t.data:
+            title = t.data["title"]
+
+    endorsement_raw = (endorsements or {}).get(p["id"])
+    endorsement = TopRankerPlaceEndorsement(**endorsement_raw) if endorsement_raw else None
+
+    return PlaceResponse(
+        id=p["id"],
+        name=p["name"],
+        address=p["address"],
+        lat=p["lat"],
+        lng=p["lng"],
+        category=p.get("category"),
+        tier=p["tier"],
+        avg_rating=float(p["avg_rating"]),
+        rating_count=p["rating_count"],
+        recommender_title=title,
+        past_travel_hint=_past_travel_hint(sb, viewer_id, p["id"]) if viewer_id else None,
+        top_ranker_endorsement=endorsement,
+        is_mine=viewer_id is not None and p.get("recommended_by") == viewer_id,
+    )
+
+
+@router.get("/{place_id}", response_model=PlaceResponse)
+async def get_place(
+    place_id: UUID,
+    viewer_id: str | None = Depends(get_optional_user_id),
+):
+    sb = get_supabase()
+    place_key = str(place_id)
+    result = (
+        sb.table("places")
+        .select("*, profiles(trust_score, selected_title_id)")
+        .eq("id", place_key)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="장소를 찾을 수 없습니다")
+    endorsements = get_top_ranker_endorsements_for_places(sb, [place_key])
+    return _place_row_to_response(sb, result.data, viewer_id, endorsements)
 
 
 @router.get("/{place_id}/reviews", response_model=PlaceReviewsResponse)
@@ -148,55 +208,18 @@ async def delete_place_review(
 @router.get("", response_model=list[PlaceResponse])
 async def list_places(
     room_id: UUID | None = None,
-    user_id: str = Depends(get_current_user_id),
+    viewer_id: str | None = Depends(get_optional_user_id),
 ):
     sb = get_supabase()
     query = sb.table("places").select("*, profiles(trust_score, selected_title_id)")
     if room_id:
-        query = query.eq("room_id", str(room_id))
+        query = query.or_(f"room_id.is.null,room_id.eq.{room_id}")
     result = query.order("avg_rating", desc=True).limit(50).execute()
 
     place_ids = [p["id"] for p in result.data]
     endorsements = get_top_ranker_endorsements_for_places(sb, place_ids)
 
-    items = []
-    for p in result.data:
-        title = None
-        prof = p.get("profiles")
-        if prof and prof.get("selected_title_id"):
-            t = (
-                sb.table("recommender_titles")
-                .select("title")
-                .eq("id", prof["selected_title_id"])
-                .single()
-                .execute()
-            )
-            if t.data:
-                title = t.data["title"]
-
-        endorsement_raw = endorsements.get(p["id"])
-        endorsement = (
-            TopRankerPlaceEndorsement(**endorsement_raw) if endorsement_raw else None
-        )
-
-        items.append(
-            PlaceResponse(
-                id=p["id"],
-                name=p["name"],
-                address=p["address"],
-                lat=p["lat"],
-                lng=p["lng"],
-                category=p.get("category"),
-                tier=p["tier"],
-                avg_rating=float(p["avg_rating"]),
-                rating_count=p["rating_count"],
-                recommender_title=title,
-                past_travel_hint=_past_travel_hint(sb, user_id, p["id"]),
-                top_ranker_endorsement=endorsement,
-                is_mine=p.get("recommended_by") == user_id,
-            )
-        )
-    return items
+    return [_place_row_to_response(sb, p, viewer_id, endorsements) for p in result.data]
 
 
 @router.post("", response_model=PlaceResponse, status_code=201)
@@ -336,6 +359,20 @@ async def vote_recommendation(
         on_conflict="place_id,voter_id",
     ).execute()
     return {"ok": True}
+
+
+@router.post("/travel-route", response_model=TravelRouteResponse)
+async def estimate_travel_route(
+    body: TravelTimeRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """출발지→목적지 경로 + 폴리라인 (지도 경로선용, 카카오모빌리티 API)"""
+    try:
+        return await get_travel_route(
+            body.origin_lat, body.origin_lng, body.dest_lat, body.dest_lng
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"경로 조회 실패: {e}") from e
 
 
 @router.post("/travel-time", response_model=TravelTimeResponse)

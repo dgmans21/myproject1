@@ -9,14 +9,36 @@ import { Copy, Link2, RefreshCw } from "lucide-react";
 
 interface InviteLinkPanelProps {
   roomId: string;
-  isOwner: boolean;
 }
 
-/** URL 초대 링크 (토큰·만료·재생성 — mock) */
-export function InviteLinkPanel({ roomId, isOwner }: InviteLinkPanelProps) {
+/** URL 초대 링크 (토큰·만료·재생성) — 방장 전용 */
+export function InviteLinkPanel({ roomId }: InviteLinkPanelProps) {
+  const [isOwner, setIsOwner] = useState(false);
+  const [ownerChecked, setOwnerChecked] = useState(false);
   const [info, setInfo] = useState<InviteLinkInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.rooms
+      .hostTransferStatus(roomId)
+      .then((status) => {
+        if (!cancelled) {
+          setIsOwner(Boolean(status.is_me_owner));
+          setOwnerChecked(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsOwner(false);
+          setOwnerChecked(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
 
   const reload = useCallback(async () => {
     if (!canManageRoom(isOwner)) return;
@@ -32,10 +54,11 @@ export function InviteLinkPanel({ roomId, isOwner }: InviteLinkPanelProps) {
   }, [roomId, isOwner]);
 
   useEffect(() => {
+    if (!ownerChecked || !isOwner) return;
     reload().catch(() => {});
-  }, [reload]);
+  }, [ownerChecked, isOwner, reload]);
 
-  if (!canManageRoom(isOwner)) return null;
+  if (!ownerChecked || !canManageRoom(isOwner)) return null;
 
   const fullUrl =
     typeof window !== "undefined" && info
@@ -95,7 +118,9 @@ export function InviteLinkPanel({ roomId, isOwner }: InviteLinkPanelProps) {
             </Button>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <p className="mt-3 text-sm text-muted">초대 링크를 불러오지 못했습니다.</p>
+      )}
     </Card>
   );
 }
