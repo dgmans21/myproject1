@@ -1,0 +1,57 @@
+---
+description: PC LAN IP 변경 시 폰·모바일 dev 설정 체크리스트 (allowedDevOrigins·CORS·API URL)
+alwaysApply: true
+---
+
+# LAN IP 변경 메뉴얼 (폰 실기기 dev)
+
+PC Wi‑Fi IP가 바뀌면 **스크립트 + 외부 콘솔**을 같이 맞춘다. IP가 어긋나면 폰에서 로그인 버튼이 **아무 반응 없음**(Next가 `/_next/*` 차단) 또는 API CORS 실패가 난다.
+
+**문서·예시·커밋·DEVELOPERS에 실제 LAN IP를 적지 말 것.** 예시는 항상 `192.168.0.10` (가짜). 실값은 `frontend/.env.local` / `backend/.env`에만 (gitignore).
+
+## 1. 한 번에 env 맞추기
+
+```powershell
+# PC IP 확인: ipconfig → IPv4 (실값은 로컬에만)
+.\scripts\set-lan-ip.ps1 -Ip 192.168.0.10
+```
+
+스크립트가 갱신하는 것:
+
+| 파일 | 키 |
+|------|-----|
+| `frontend/.env.local` | `DEV_LAN_IP`, `NEXT_PUBLIC_API_URL=http://<IP>:8000` |
+| `backend/.env` | `CORS_ORIGINS` (localhost + 127.0.0.1 + `http://<IP>:3000`) |
+
+`frontend/next.config.ts`의 `allowedDevOrigins`는 **`DEV_LAN_IP`를 읽음** → env만 맞추고 **`npm run dev` 재시작**.
+
+## 2. 프로세스 재시작
+
+```powershell
+# 프론트
+cd frontend; npm run dev
+
+# 백엔드 — 폰에서 :8000 접근하려면 반드시 0.0.0.0
+cd backend; uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+폰 브라우저: `http://<IP>:3000` (같은 Wi‑Fi). PC는 `localhost:3000`도 가능(API는 LAN IP).
+
+## 3. 수동(콘솔) — 스크립트가 못 함
+
+IP·포트까지 **정확히** 추가:
+
+| 서비스 | 등록 |
+|--------|------|
+| Supabase → Authentication → URL Configuration → Redirect URLs | `http://<IP>:3000/auth/callback` |
+| 카카오 개발자 → JS 키 도메인 | `http://<IP>:3000` |
+| 네이버 개발자 → Callback (쓸 때) | `http://<IP>:8000/api/v1/auth/naver/callback` |
+
+이메일/비번 로그인은 Redirect 없이도 되지만, **JS 차단·API localhost**면 실패처럼 보인다.
+
+## 4. Agent가 할 일
+
+- 사용자가 “폰 로그인 안 됨 / LAN IP 바뀜”이면 `ipconfig` 또는 사용자가 준 IP로 `set-lan-ip.ps1` 안내·실행
+- `NEXT_PUBLIC_API_URL=http://localhost:8000`만 두고 폰 테스트하지 말 것
+- 비밀키·**실제 LAN IP**·`.env` 값을 `DEVELOPERS.local.md`/규칙/커밋 예시에 넣지 말 것 (예시는 `192.168.0.10`)
+- `set-lan-ip.ps1`은 **UTF-8 BOM 없이** `.env`를 쓴다. PowerShell `Set-Content -Encoding UTF8`는 BOM을 넣어 Settings 로드가 깨질 수 있음

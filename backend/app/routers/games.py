@@ -44,13 +44,54 @@ class LiarStartRequest(BaseModel):
     game_type: Literal["liar"] = "liar"
     play_mode: Literal["moderator", "remote"] = "moderator"
     total_rounds: int = Field(default=3, ge=1, le=20)
-    category_id: str
-    liar_mode: Literal["category_only"] = "category_only"
+    category_id: str | None = None
+    topic_policy: Literal["fixed", "random_each_round"] = "fixed"
+    liar_mode: Literal["category_only", "fake_word", "fake_category"] = "category_only"
     discussion_seconds: int = Field(default=120, ge=10, le=600)
-    # moderator
     player_names: list[str] | None = None
     host_joins: bool = True
-    # remote
+    player_user_ids: list[str] | None = None
+    player_display_names: dict[str, str] | None = None
+
+
+class MafiaStartRequest(BaseModel):
+    game_type: Literal["mafia"] = "mafia"
+    play_mode: Literal["moderator", "remote"] = "moderator"
+    total_rounds: int = Field(default=1, ge=1, le=10)
+    discussion_seconds: int = Field(default=120, ge=10, le=600)
+    role_reveal_on_death: bool = True
+    bot_count: int = Field(default=0, ge=0, le=8)
+    mafia_count: int = Field(default=1, ge=0, le=5)
+    spy_count: int = Field(default=0, ge=0, le=3)
+    doctor_count: int = Field(default=1, ge=0, le=2)
+    police_count: int = Field(default=1, ge=0, le=2)
+    vigilante_count: int = Field(default=0, ge=0, le=2)
+    player_names: list[str] | None = None
+    host_joins: bool = False
+    player_user_ids: list[str] | None = None
+    player_display_names: dict[str, str] | None = None
+
+
+class GameStartRequest(BaseModel):
+    game_type: Literal["liar", "mafia"] = "liar"
+    play_mode: Literal["moderator", "remote"] = "moderator"
+    total_rounds: int = 3
+    discussion_seconds: int = 120
+    # liar
+    category_id: str | None = None
+    topic_policy: Literal["fixed", "random_each_round"] | None = None
+    liar_mode: Literal["category_only", "fake_word", "fake_category"] | None = None
+    # mafia
+    role_reveal_on_death: bool | None = None
+    bot_count: int | None = None
+    mafia_count: int | None = None
+    spy_count: int | None = None
+    doctor_count: int | None = None
+    police_count: int | None = None
+    vigilante_count: int | None = None
+    # common
+    player_names: list[str] | None = None
+    host_joins: bool | None = None
     player_user_ids: list[str] | None = None
     player_display_names: dict[str, str] | None = None
 
@@ -75,7 +116,6 @@ def get_active_game(room_id: str, user_id: str = Depends(get_current_user_id)):
     ensure_registered()
     state = store.get_by_room(str(room_id))
     if not state:
-        # also allow reconnect to most recent ended? skip for prototype
         return {"game": None}
     engine = get_engine(state.game_type)
     return {"game": engine.project(state, user_id)}
@@ -84,7 +124,7 @@ def get_active_game(room_id: str, user_id: str = Depends(get_current_user_id)):
 @router.post("/{room_id}/games/start")
 async def start_game(
     room_id: str,
-    body: LiarStartRequest,
+    body: GameStartRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
@@ -101,7 +141,6 @@ async def start_game(
             if not is_member(sb, rid, uid):
                 raise HTTPException(status_code=400, detail="참가자는 방 멤버여야 합니다")
 
-    # fill display names from profiles when remote
     display_names = dict(body.player_display_names or {})
     if body.play_mode == "remote":
         uids = list(body.player_user_ids or [])
@@ -119,8 +158,12 @@ async def start_game(
                 display_names[row["id"]] = row.get("display_name") or "플레이어"
 
     engine = get_engine(body.game_type)
-    config = body.model_dump()
+    config = body.model_dump(exclude_none=True)
     config["player_display_names"] = display_names
+    if body.game_type == "mafia" and body.host_joins is None:
+        config["host_joins"] = False
+    if body.game_type == "liar" and body.host_joins is None:
+        config["host_joins"] = True
     state = engine.create(room_id=rid, host_user_id=user_id, config=config)
     store.save(state)
     await hub.broadcast(state, engine)

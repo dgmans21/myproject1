@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.games.engine.base import GameEngine, GameState, PlayMode, Player, utc_now
-from app.games.liar.words import get_category
+from app.games.liar.words import get_category, load_all_categories, pick_decoy_word
 
 # Phases
 WAITING = "WAITING"
@@ -22,6 +22,14 @@ ENDED = "ENDED"
 
 MIN_PLAYERS = 3
 MAX_PLAYERS = 12
+
+# Legacy alias: fake_category → fake_word (same topic, wrong word)
+_LIAR_MODE_ALIASES = {"fake_category": "fake_word"}
+
+
+def _normalize_liar_mode(raw: str | None) -> str:
+    mode = (raw or "category_only").strip()
+    return _LIAR_MODE_ALIASES.get(mode, mode)
 
 SCORE_ARREST_OK_CITIZEN = 100
 SCORE_ARREST_OK_LIAR = -50
@@ -42,21 +50,57 @@ class LiarEngine(GameEngine):
         if total_rounds < 1 or total_rounds > 20:
             raise HTTPException(status_code=400, detail="라운드 수는 1~20이어야 합니다")
 
+        topic_policy = config.get("topic_policy", "fixed")
+        if topic_policy not in ("fixed", "random_each_round"):
+            raise HTTPException(
+                status_code=400,
+                detail="topic_policy는 fixed(고정) 또는 random_each_round(매판 랜덤)만 가능합니다",
+            )
+
         category_id = config.get("category_id")
-        if not category_id:
-            raise HTTPException(status_code=400, detail="카테고리를 선택하세요")
-        try:
-            pack = get_category(str(category_id))
-        except KeyError:
-            raise HTTPException(status_code=400, detail="알 수 없는 카테고리입니다")
+        if topic_policy == "fixed":
+            if not category_id:
+                raise HTTPException(status_code=400, detail="카테고리를 선택하세요")
+            try:
+                pack = get_category(str(category_id))
+            except KeyError:
+                raise HTTPException(status_code=400, detail="알 수 없는 카테고리입니다")
+        else:
+            packs = list(load_all_categories().values())
+            if not packs:
+                raise HTTPException(status_code=400, detail="카테고리 데이터가 없습니다")
+            # optional seed category, else random
+            if category_id:
+                try:
+                    pack = get_category(str(category_id))
+                except KeyError:
+                    pack = random.choice(packs)
+            else:
+                pack = random.choice(packs)
 
         discussion_seconds = int(config.get("discussion_seconds", 120))
         if discussion_seconds < 10 or discussion_seconds > 600:
             raise HTTPException(status_code=400, detail="토론 시간은 10~600초입니다")
 
-        liar_mode = config.get("liar_mode", "category_only")
-        if liar_mode != "category_only":
-            raise HTTPException(status_code=400, detail="프로토타입은 category_only(A모드)만 지원합니다")
+        liar_mode = _normalize_liar_mode(config.get("liar_mode", "category_only"))
+        if liar_mode not in ("category_only", "fake_word"):
+            raise HTTPException(
+                status_code=400,
+                detail="liar_mode는 category_only(일반) 또는 fake_word(가짜 정답)만 가능합니다",
+            )
+        if liar_mode == "fake_word":
+            if not any(len(p.words) >= 2 for p in load_all_categories().values()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="가짜 정답 모드는 단어가 2개 이상인 카테고리가 필요합니다",
+                )
+            if topic_policy == "fixed" and len(pack.words) < 2:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"「{pack.name}」은 단어가 부족합니다. 다른 주제를 고르거나 매판 랜덤을 쓰세요",
+                )
+        if topic_policy == "random_each_round" and len(load_all_categories()) < 1:
+            raise HTTPException(status_code=400, detail="카테고리 데이터가 없습니다")
 
         players = self._build_players(play_mode, host_user_id, config)
         if len(players) < MIN_PLAYERS:
@@ -78,9 +122,10 @@ class LiarEngine(GameEngine):
             payload={
                 "category_id": pack.id,
                 "category_name": pack.name,
+                "topic_policy": topic_policy,
                 "liar_mode": liar_mode,
                 "discussion_seconds": discussion_seconds,
-                "used_words": [],
+                "used_words": [],  # entries: "category_id::word"
                 "round": {},
             },
         )
@@ -131,18 +176,39 @@ class LiarEngine(GameEngine):
         return players
 
     def _start_round(self, state: GameState) -> None:
-        pack = get_category(state.payload["category_id"])
+        topic_policy = state.payload.get("topic_policy") or "fixed"
+        prev_id = state.payload.get("category_id")
+
+        if topic_policy == "random_each_round":
+            packs = list(load_all_categories().values())
+            if len(packs) > 1 and prev_id:
+                candidates = [p for p in packs if p.id != prev_id]
+                pack = random.choice(candidates or packs)
+            else:
+                pack = random.choice(packs)
+        else:
+            pack = get_category(state.payload["category_id"])
+
+        state.payload["category_id"] = pack.id
+        state.payload["category_name"] = pack.name
+
         used: list[str] = list(state.payload.get("used_words") or [])
-        pool = [w for w in pack.words if w not in used]
+        used_set = set(used)
+
+        def key(cat_id: str, w: str) -> str:
+            return f"{cat_id}::{w}"
+
+        pool = [w for w in pack.words if key(pack.id, w) not in used_set]
         if not pool:
-            used = []
+            # clear only this category's used entries, then retry
+            used = [u for u in used if not u.startswith(f"{pack.id}::")]
+            used_set = set(used)
             pool = list(pack.words)
         word = random.choice(pool)
-        used.append(word)
-        state.payload["used_words"] = used
+        used.append(key(pack.id, word))
 
         liar = random.choice(state.players)
-        state.payload["round"] = {
+        round_data: dict[str, Any] = {
             "word": word,
             "liar_player_id": liar.player_id,
             "reveal_index": 0,
@@ -152,7 +218,30 @@ class LiarEngine(GameEngine):
             "guess_correct": None,
             "round_delta": {},
             "revealed_player_ids": [],
+            "decoy_word": None,
         }
+        if _normalize_liar_mode(state.payload.get("liar_mode")) == "fake_word":
+            if len(pack.words) < 2:
+                # random_each_round fallback: try another category with 2+ words
+                alt = [p for p in load_all_categories().values() if len(p.words) >= 2]
+                if not alt:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="가짜 정답 모드에 쓸 단어 풀이 부족합니다",
+                    )
+                pack = random.choice(alt)
+                state.payload["category_id"] = pack.id
+                state.payload["category_name"] = pack.name
+                pool2 = [w for w in pack.words if key(pack.id, w) not in set(used)]
+                word = random.choice(pool2 or list(pack.words))
+                used = [u for u in used if not u.startswith(f"{pack.id}::")]
+                used.append(key(pack.id, word))
+                round_data["word"] = word
+            decoy = pick_decoy_word(pack, word, used_keys=set(used))
+            round_data["decoy_word"] = decoy
+            used.append(key(pack.id, decoy))
+        state.payload["used_words"] = used
+        state.payload["round"] = round_data
         state.set_phase(ROLE_REVEAL)
 
     def apply_action(
@@ -454,6 +543,7 @@ class LiarEngine(GameEngine):
             "players": state.public_players(),
             "category_id": state.payload.get("category_id"),
             "category_name": state.payload.get("category_name"),
+            "topic_policy": state.payload.get("topic_policy") or "fixed",
             "liar_mode": state.payload.get("liar_mode"),
             "discussion_seconds": state.payload.get("discussion_seconds"),
             "is_host": is_host,
@@ -519,12 +609,23 @@ class LiarEngine(GameEngine):
     def _role_card_for(self, state: GameState, player_id: str) -> dict[str, Any]:
         rnd = state.payload["round"]
         is_liar = player_id == rnd["liar_player_id"]
+        liar_mode = state.payload.get("liar_mode") or "category_only"
+
+        if is_liar and _normalize_liar_mode(liar_mode) == "fake_word":
+            # Same topic, wrong word — looks like a normal citizen card
+            return {
+                "category_name": state.payload["category_name"],
+                "is_liar": False,
+                "word": rnd.get("decoy_word") or "",
+                "is_decoy": True,
+            }
+
         card: dict[str, Any] = {
             "category_name": state.payload["category_name"],
             "is_liar": is_liar,
         }
         if is_liar:
-            # A-mode: category only — omit word key
+            # category_only: topic only — omit word key
             pass
         else:
             card["word"] = rnd["word"]

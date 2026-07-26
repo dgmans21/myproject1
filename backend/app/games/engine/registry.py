@@ -22,6 +22,8 @@ def ensure_registered() -> None:
     """Import concrete engines so they register themselves."""
     if _REGISTRY:
         return
-    from app.games.liar.engine import LiarEngine  # noqa: F401
+    from app.games.liar.engine import LiarEngine
+    from app.games.mafia.engine import MafiaEngine
 
     register(LiarEngine())
+    register(MafiaEngine())

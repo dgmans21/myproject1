@@ -8,7 +8,17 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { useGameSocket } from "@/hooks/use-game-socket";
-import { gamesApi, type GameView, type RoleCard } from "@/lib/api/games";
+import { MafiaGameView } from "@/components/games/MafiaGameView";
+import {
+  gamesApi,
+  LIAR_MODE_LABELS,
+  PLAY_MODE_LABELS,
+  TOPIC_POLICY_LABELS,
+  type GameView,
+  type LiarMode,
+  type RoleCard,
+  type TopicPolicy,
+} from "@/lib/api/games";
 
 const PHASE_LABEL: Record<string, string> = {
   ROLE_REVEAL: "역할 공개",
@@ -36,7 +46,7 @@ function RoleCardView({ card, title }: { card: RoleCard; title?: string }) {
       ) : (
         <>
           <p className="mt-3 text-2xl font-bold text-primary">{card.word}</p>
-          <p className="mt-2 text-sm text-muted">시민 — 이 단어를 설명하세요.</p>
+          <p className="mt-2 text-sm text-muted">이 단어를 설명하세요.</p>
         </>
       )}
     </div>
@@ -65,6 +75,7 @@ function ScoreBoard({ game }: { game: GameView }) {
 
 function PhaseTimer({ game }: { game: GameView }) {
   const [remaining, setRemaining] = useState<number | null>(null);
+  const isDiscussion = game.phase === "DISCUSSION";
 
   useEffect(() => {
     if (!game.phase_duration_seconds || !game.phase_started_at) {
@@ -77,12 +88,70 @@ function PhaseTimer({ game }: { game: GameView }) {
       setRemaining(Math.max(0, Math.ceil((end - Date.now()) / 1000)));
     };
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, isDiscussion ? 250 : 1000);
     return () => clearInterval(id);
-  }, [game.phase_duration_seconds, game.phase_started_at, game.phase]);
+  }, [game.phase_duration_seconds, game.phase_started_at, game.phase, isDiscussion]);
 
   if (remaining == null) return null;
+
+  if (isDiscussion) {
+    const showExpired = remaining === 0;
+    const mm = Math.floor(remaining / 60);
+    const ss = remaining % 60;
+    const urgent = remaining > 0 && remaining <= 15;
+    return (
+      <div
+        className={`rounded-2xl border px-4 py-4 text-center ${
+          showExpired
+            ? "border-accent/40 bg-accent/10"
+            : urgent
+              ? "border-red-500/30 bg-red-500/10"
+              : "border-border bg-surface/60"
+        }`}
+      >
+        <p className="text-xs font-medium text-muted">토론 시간</p>
+        {showExpired ? (
+          <p className="mt-1 text-2xl font-bold text-accent">시간 종료</p>
+        ) : (
+          <p
+            className={`mt-1 text-4xl font-bold tabular-nums tracking-tight ${
+              urgent ? "text-red-600 dark:text-red-400" : "text-foreground"
+            }`}
+          >
+            {mm}:{String(ss).padStart(2, "0")}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return <p className="text-sm tabular-nums text-muted">남은 시간 {remaining}초</p>;
+}
+
+/** 투표 결과 공개 전 3·2·1 */
+function useRevealCountdown(phase: string, roundKey: string) {
+  const [n, setN] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (phase !== "REVEAL") {
+      setN(null);
+      return;
+    }
+    setN(3);
+    let current = 3;
+    const id = setInterval(() => {
+      current -= 1;
+      if (current <= 0) {
+        clearInterval(id);
+        setN(0);
+      } else {
+        setN(current);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase, roundKey]);
+
+  return n; // null=N/A, 3|2|1=counting, 0=done
 }
 
 export default function GamePage() {
@@ -93,6 +162,10 @@ export default function GamePage() {
   const { game, status, error, sendAction } = useGameSocket(roomId, gameId);
   const [guess, setGuess] = useState("");
   const [busy, setBusy] = useState(false);
+  const revealKey = game
+    ? `${game.current_round}-${game.phase_started_at}-${game.round?.accused_player_id ?? "none"}`
+    : "";
+  const revealCount = useRevealCountdown(game?.phase ?? "", revealKey);
 
   const act = async (action: string, data?: Record<string, unknown>) => {
     setBusy(true);
@@ -135,9 +208,36 @@ export default function GamePage() {
     );
   }
 
+  if (game.game_type === "mafia") {
+    return (
+      <div className="mx-auto flex h-[calc(100dvh-3.5rem)] max-w-lg flex-col px-4 py-3">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <Link href={`/groups/${roomId}`} className="inline-flex items-center gap-1 text-sm text-muted">
+            <ArrowLeft className="h-4 w-4" /> 방
+          </Link>
+          {game.is_host && (
+            <Button size="sm" variant="ghost" onClick={forceEnd} disabled={busy}>
+              강제 종료
+            </Button>
+          )}
+        </div>
+        {error && <p className="mb-2 shrink-0 text-sm text-red-500">{error}</p>}
+        <div className="min-h-0 flex-1">
+          <MafiaGameView game={game} busy={busy} onAction={act} />
+        </div>
+      </div>
+    );
+  }
+
   const isMod = game.play_mode === "moderator";
   const host = game.is_host;
   const players = game.players;
+  const liarModeLabel =
+    LIAR_MODE_LABELS[(game.liar_mode as LiarMode) || "category_only"] || game.liar_mode;
+  const playModeLabel = PLAY_MODE_LABELS[game.play_mode] || game.play_mode;
+  const topicLabel =
+    TOPIC_POLICY_LABELS[(game.topic_policy as TopicPolicy) || "fixed"] || game.topic_policy;
+  const revealReady = revealCount === 0;
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 pb-24">
@@ -156,7 +256,8 @@ export default function GamePage() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <p className="text-xs text-muted">
-              라이어 · {game.category_name} · {isMod ? "사회자" : "원격"}
+              라이어 · {game.category_name} · {playModeLabel} · {liarModeLabel}
+              {topicLabel ? ` · ${topicLabel}` : ""}
             </p>
             <CardTitle className="mt-1">
               라운드 {game.current_round}/{game.total_rounds}
@@ -165,7 +266,7 @@ export default function GamePage() {
               {PHASE_LABEL[game.phase] || game.phase}
             </p>
           </div>
-          <PhaseTimer game={game} />
+          {game.phase !== "DISCUSSION" && <PhaseTimer game={game} />}
         </div>
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
@@ -209,6 +310,7 @@ export default function GamePage() {
         {/* DISCUSSION */}
         {game.phase === "DISCUSSION" && (
           <div className="mt-5 space-y-4">
+            <PhaseTimer game={game} />
             {!isMod && game.role_card && <RoleCardView card={game.role_card} />}
             {isMod && (
               <p className="text-sm text-muted">
@@ -279,29 +381,43 @@ export default function GamePage() {
         {/* REVEAL */}
         {game.phase === "REVEAL" && (
           <div className="mt-5 space-y-4 text-center">
-            <p className="text-sm text-muted">정답 단어</p>
-            <p className="text-3xl font-bold text-primary">{game.round.word}</p>
-            <p className="text-sm text-foreground">
-              라이어:{" "}
-              {players.find((p) => p.player_id === game.round.liar_player_id)?.display_name}
-            </p>
-            {game.round.accused_player_id && (
-              <p className="text-sm text-muted">
-                지목:{" "}
-                {players.find((p) => p.player_id === game.round.accused_player_id)?.display_name}
-              </p>
-            )}
-            <p
-              className={`text-lg font-semibold ${
-                game.round.arrest_success ? "text-primary" : "text-accent"
-              }`}
-            >
-              {game.round.arrest_success ? "검거 완료" : "검거 실패"}
-            </p>
-            {host && (
-              <Button className="w-full" onClick={() => act("ack_round_score")} disabled={busy}>
-                {game.round.arrest_success ? "정답 타임으로" : "점수 확인"}
-              </Button>
+            {!revealReady ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <p className="text-sm text-muted">결과 공개</p>
+                <p
+                  key={revealCount}
+                  className="mt-4 text-7xl font-bold tabular-nums text-primary animate-pulse"
+                >
+                  {revealCount}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted">정답 단어</p>
+                <p className="text-3xl font-bold text-primary">{game.round.word}</p>
+                <p className="text-sm text-foreground">
+                  라이어:{" "}
+                  {players.find((p) => p.player_id === game.round.liar_player_id)?.display_name}
+                </p>
+                {game.round.accused_player_id && (
+                  <p className="text-sm text-muted">
+                    지목:{" "}
+                    {players.find((p) => p.player_id === game.round.accused_player_id)?.display_name}
+                  </p>
+                )}
+                <p
+                  className={`text-lg font-semibold ${
+                    game.round.arrest_success ? "text-primary" : "text-accent"
+                  }`}
+                >
+                  {game.round.arrest_success ? "검거 완료" : "검거 실패"}
+                </p>
+                {host && (
+                  <Button className="w-full" onClick={() => act("ack_round_score")} disabled={busy}>
+                    {game.round.arrest_success ? "정답 타임으로" : "점수 확인"}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
