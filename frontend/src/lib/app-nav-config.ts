@@ -78,7 +78,7 @@ export function getNavSection(pathname: string, isAdmin = false): AppNavSection 
       title: "방",
       links: [
         { href: "/groups", label: "방 목록" },
-        { href: "/groups", label: "방 만들기" },
+        { href: "/groups?create=1", label: "방 만들기" },
       ],
     };
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNavSection } from "@/lib/app-nav-config";
@@ -14,6 +14,23 @@ type AppNavPanelProps = {
   className?: string;
 };
 
+function isNavLinkActive(pathname: string, searchParams: URLSearchParams, href: string): boolean {
+  const [path, query = ""] = href.split("?");
+  const hrefParams = new URLSearchParams(query);
+  const hrefWantsCreate = hrefParams.get("create") === "1";
+  const pageHasCreate = searchParams.get("create") === "1";
+
+  if (path === "/groups" && pathname === "/groups") {
+    return hrefWantsCreate === pageHasCreate;
+  }
+
+  return (
+    pathname === href ||
+    pathname === path ||
+    (path !== "/groups" && path !== "/" && pathname.startsWith(path))
+  );
+}
+
 export function AppNavPanel({
   collapsed,
   onToggleCollapse,
@@ -22,6 +39,7 @@ export function AppNavPanel({
   className,
 }: AppNavPanelProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const section = getNavSection(pathname, isAdmin);
 
   return (
@@ -49,9 +67,7 @@ export function AppNavPanel({
         <nav className="flex-1 overflow-y-auto p-2">
           <ul className="space-y-0.5">
             {section.links.map((link) => {
-              const active =
-                pathname === link.href ||
-                (link.href !== "/groups" && pathname.startsWith(link.href));
+              const active = isNavLinkActive(pathname, searchParams, link.href);
               return (
                 <li key={`${link.href}-${link.label}`}>
                   <Link
@@ -76,7 +92,7 @@ export function AppNavPanel({
       {collapsed && (
         <button
           type="button"
-          onClick={ () => { alert("clicked"); onToggleCollapse(); }}
+          onClick={onToggleCollapse}
           className="absolute left-0 top-3 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted shadow-sm hover:text-foreground"
           aria-label="메뉴 패널 펼치기"
         >

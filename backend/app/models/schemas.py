@@ -38,6 +38,7 @@ class MeetingPurpose(str, Enum):
     MONTHLY = "MONTHLY"
     CASUAL = "CASUAL"
     FLASH = "FLASH"
+    GAME_CLUB = "GAME_CLUB"
     OTHER = "OTHER"
 
 

@@ -5,6 +5,7 @@ export const MEETING_PURPOSE_OPTIONS = [
   { id: "MONTHLY", label: "월간모임" },
   { id: "CASUAL", label: "단순모임" },
   { id: "FLASH", label: "번개" },
+  { id: "GAME_CLUB", label: "게임동호회" },
   { id: "OTHER", label: "기타" },
 ] as const;
 

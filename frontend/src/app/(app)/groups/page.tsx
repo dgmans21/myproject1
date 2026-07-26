@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -18,6 +19,8 @@ import { Plus, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { rooms, loading, fetchRooms, updateRoom, removeRoom } = useRoomStore();
   const [showCreate, setShowCreate] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
@@ -28,9 +31,39 @@ export default function GroupsPage() {
   }, [fetchRooms]);
 
   useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    if (isGuestSession()) {
+      setGuestPrompt(true);
+      return;
+    }
+    setShowCreate(true);
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!showCreate) return;
     scrollFormIntoView(createFormRef.current, { focusSelector: "#room-create-name" });
   }, [showCreate]);
+
+  const openCreate = () => {
+    if (isGuestSession()) {
+      setGuestPrompt(true);
+      return;
+    }
+    setShowCreate(true);
+    router.replace("/groups?create=1", { scroll: false });
+  };
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    if (searchParams.get("create") === "1") {
+      router.replace("/groups", { scroll: false });
+    }
+  };
+
+  const toggleCreate = () => {
+    if (showCreate) closeCreate();
+    else openCreate();
+  };
 
   const handlePromote = async (id: string) => {
     try {
@@ -46,21 +79,13 @@ export default function GroupsPage() {
     removeRoom(id);
   };
 
-  const openCreate = () => {
-    if (isGuestSession()) {
-      setGuestPrompt(true);
-      return;
-    }
-    setShowCreate((open) => !open);
-  };
-
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="sr-only">
             <h1>방</h1>
           </div>
-          <Button className="w-full sm:ml-auto sm:w-auto" onClick={openCreate}>
+          <Button className="w-full sm:ml-auto sm:w-auto" onClick={toggleCreate}>
             <Plus className="h-4 w-4" />
             {showCreate ? "닫기" : "새 방"}
           </Button>
@@ -68,7 +93,7 @@ export default function GroupsPage() {
 
         {showCreate && (
           <div ref={createFormRef} className="mt-6 scroll-mt-24">
-            <RoomCreateForm onClose={() => setShowCreate(false)} />
+            <RoomCreateForm onClose={closeCreate} />
           </div>
         )}
 
@@ -79,9 +104,15 @@ export default function GroupsPage() {
           {loading ? (
             <p className="text-muted col-span-full text-center py-12">불러오는 중...</p>
           ) : rooms.length === 0 ? (
-            <div className="col-span-full text-center py-16">
-              <Users className="mx-auto h-12 w-12 text-muted/40" />
+            <div className="col-span-full flex flex-col items-center py-16 text-center">
+              <Users className="h-12 w-12 text-muted/40" />
               <p className="mt-4 text-muted">아직 방이 없습니다. 새 방을 만들어보세요!</p>
+              {!showCreate && (
+                <Button className="mt-5" onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  새 방
+                </Button>
+              )}
             </div>
           ) : (
             rooms.map((room) => (

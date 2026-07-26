@@ -19,6 +19,7 @@ import { ProfileNameButton } from "@/components/ProfileNameButton";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { MeetingPurposeSelector } from "@/components/MeetingPurposeSelector";
 import { TeamScheduleRoomPanel } from "@/components/TeamScheduleRoomPanel";
+import { GameLobbyPanel } from "@/components/games/GameLobbyPanel";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { isGuestSession } from "@/lib/auth-session";
@@ -193,6 +194,16 @@ export default function GroupDetailPage() {
         {!isTeamScheduleRoom && (
           <div className="mt-6">
             <MeetingPurposeSelector roomId={id!} readOnly={readOnly} />
+          </div>
+        )}
+
+        {!isTeamScheduleRoom && !readOnly && (
+          <div className="mt-6">
+            <GameLobbyPanel
+              roomId={id!}
+              members={members}
+              isOwner={!!members.find((m) => m.is_me && m.role === "OWNER")}
+            />
           </div>
         )}
 

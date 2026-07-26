@@ -1,15 +1,41 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_supabase
-from app.routers import analytics, appointments, auth_naver, friends, host_transfer, places, profiles, room_votes, rooms, saved_locations, team_schedule
+from app.games.engine.registry import ensure_registered
+from app.games.engine.tick import start_tick_loop
+from app.routers import (
+    analytics,
+    appointments,
+    auth_naver,
+    friends,
+    games,
+    host_transfer,
+    places,
+    profiles,
+    room_votes,
+    rooms,
+    saved_locations,
+    team_schedule,
+)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_registered()
+    start_tick_loop()
+    yield
+
 
 app = FastAPI(
     title="우리지금만나 API",
     description="스마트 약속 관리 - 이동 시간 예측 & 2단계 투표 & 신뢰도 칭호",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -28,6 +54,7 @@ app.include_router(rooms.router, prefix="/api/v1")
 app.include_router(host_transfer.router, prefix="/api/v1")
 app.include_router(team_schedule.router, prefix="/api/v1")
 app.include_router(room_votes.router, prefix="/api/v1")
+app.include_router(games.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
 app.include_router(places.router, prefix="/api/v1")
 app.include_router(saved_locations.router, prefix="/api/v1")
