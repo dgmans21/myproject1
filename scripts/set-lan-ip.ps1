@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
   Sync frontend/backend local env when the PC LAN IP changes.
+  Also enables CORS / Next allowedDevOrigins for the same /24 octets .100-.250
+  so DHCP churn inside that range does not break phone login.
 
 .EXAMPLE
   .\scripts\set-lan-ip.ps1 -Ip 192.168.0.10
@@ -43,16 +45,28 @@ function Set-EnvLine([string]$path, [string]$key, [string]$value) {
   Write-Utf8NoBom $path $next
 }
 
+$parts = $Ip.Split(".")
+if ($parts.Count -ne 4) {
+  throw "Invalid IPv4: $Ip"
+}
+$lanPrefix = "{0}.{1}.{2}" -f $parts[0], $parts[1], $parts[2]
+
 Set-EnvLine $feEnv "DEV_LAN_IP" $Ip
 Set-EnvLine $feEnv "NEXT_PUBLIC_API_URL" "http://${Ip}:8000"
+# 초대·공유 링크 — PC가 localhost여도 폰이 열 수 있는 origin
+Set-EnvLine $feEnv "NEXT_PUBLIC_APP_URL" "http://${Ip}:3000"
 
-$cors = "http://localhost:3000,http://127.0.0.1:3000,http://${Ip}:3000"
+# localhost만 명시 — LAN 대역(.100~.250)은 CORS_LAN_PREFIX 로 백엔드가 전개
+$cors = "http://localhost:3000,http://127.0.0.1:3000"
 Set-EnvLine $beEnv "CORS_ORIGINS" $cors
+Set-EnvLine $beEnv "CORS_LAN_PREFIX" $lanPrefix
 
 Write-Host "Updated:"
 Write-Host "  frontend/.env.local  DEV_LAN_IP=$Ip"
 Write-Host "  frontend/.env.local  NEXT_PUBLIC_API_URL=http://${Ip}:8000"
+Write-Host "  frontend/.env.local  NEXT_PUBLIC_APP_URL=http://${Ip}:3000  (invite share origin)"
 Write-Host "  backend/.env         CORS_ORIGINS=$cors"
+Write-Host "  backend/.env         CORS_LAN_PREFIX=$lanPrefix  (expands .100-.250:3000)"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1) Restart frontend: cd frontend; npm run dev"

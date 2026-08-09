@@ -8,12 +8,15 @@ import { cn } from "@/lib/utils";
 
 interface AuthSocialButtonsProps {
   disabled?: boolean;
+  /** 로그인 성공 후 이동 경로 */
+  nextPath?: string;
   onProviderClick?: (provider: AuthSocialProvider) => void;
   onError?: (message: string) => void;
 }
 
 export function AuthSocialButtons({
   disabled,
+  nextPath,
   onProviderClick,
   onError,
 }: AuthSocialButtonsProps) {
@@ -27,7 +30,7 @@ export function AuthSocialButtons({
         onProviderClick(provider);
         return;
       }
-      await startSocialLogin(provider);
+      await startSocialLogin(provider, nextPath ?? "/dashboard");
     } catch (err: unknown) {
       const message = toAuthErrorMessage(err, "oauth");
       onError?.(message);

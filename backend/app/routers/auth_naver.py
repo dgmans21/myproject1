@@ -16,6 +16,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 STATE_COOKIE = "naver_oauth_state"
 ORIGIN_COOKIE = "naver_frontend_origin"
+NEXT_COOKIE = "naver_frontend_next"
+
+
+def _safe_next_path(raw: str | None) -> str:
+    value = (raw or "").strip()
+    if not value.startswith("/") or value.startswith("//") or "://" in value:
+        return "/dashboard"
+    return value
 
 
 def _frontend_error(origin: str, message: str) -> RedirectResponse:
@@ -45,8 +53,13 @@ def _callback_uri(request: Request) -> str:
 
 
 @router.get("/naver")
-async def naver_login_start(request: Request, frontend_origin: str | None = None):
+async def naver_login_start(
+    request: Request,
+    frontend_origin: str | None = None,
+    next: str | None = None,
+):
     origin = _allowed_frontend_origin(frontend_origin) or _default_frontend_origin()
+    next_path = _safe_next_path(next)
     try:
         state = secrets.token_hex(24)
         authorize = naver_oauth.build_authorize_url(_callback_uri(request), state)
@@ -55,24 +68,16 @@ async def naver_login_start(request: Request, frontend_origin: str | None = None
 
     response = RedirectResponse(url=authorize, status_code=302)
     secure = request.url.scheme == "https"
-    response.set_cookie(
-        STATE_COOKIE,
-        state,
-        httponly=True,
-        samesite="lax",
-        secure=secure,
-        max_age=600,
-        path="/",
-    )
-    response.set_cookie(
-        ORIGIN_COOKIE,
-        origin,
-        httponly=True,
-        samesite="lax",
-        secure=secure,
-        max_age=600,
-        path="/",
-    )
+    cookie_kw = {
+        "httponly": True,
+        "samesite": "lax",
+        "secure": secure,
+        "max_age": 600,
+        "path": "/",
+    }
+    response.set_cookie(STATE_COOKIE, state, **cookie_kw)
+    response.set_cookie(ORIGIN_COOKIE, origin, **cookie_kw)
+    response.set_cookie(NEXT_COOKIE, next_path, **cookie_kw)
     return response
 
 
@@ -86,6 +91,7 @@ async def naver_login_callback(
 ):
     origin = request.cookies.get(ORIGIN_COOKIE) or _default_frontend_origin()
     origin = _allowed_frontend_origin(origin) or _default_frontend_origin()
+    next_path = _safe_next_path(request.cookies.get(NEXT_COOKIE))
 
     if error or error_description:
         return _frontend_error(origin, error_description or error or "네이버 로그인 실패")
@@ -105,11 +111,12 @@ async def naver_login_callback(
     except Exception as exc:
         return _frontend_error(origin, str(exc))
 
-    q = urlencode({"token_hash": token_hash, "next": "/dashboard"})
+    q = urlencode({"token_hash": token_hash, "next": next_path})
     response = RedirectResponse(
         url=f"{origin}/auth/naver/complete?{q}",
         status_code=302,
     )
     response.delete_cookie(STATE_COOKIE, path="/")
     response.delete_cookie(ORIGIN_COOKIE, path="/")
+    response.delete_cookie(NEXT_COOKIE, path="/")
     return response

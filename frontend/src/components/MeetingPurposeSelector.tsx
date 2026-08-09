@@ -4,18 +4,19 @@ import { useEffect, useState } from "react";
 import { api, MeetingPurposeSetting } from "@/lib/api";
 import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { MeetingPurposePicker } from "@/components/MeetingPurposePicker";
-import { Target } from "lucide-react";
+import { ChevronDown, ChevronUp, Target } from "lucide-react";
 
 interface MeetingPurposeSelectorProps {
   roomId: string;
   readOnly?: boolean;
 }
 
-/** 일반 모임방 — 모임 주목적 (방 상세에서 수정) */
+/** 일반 모임방 — 모임 주목적 (방 상세에서 수정). 기본 접힘. */
 export function MeetingPurposeSelector({ roomId, readOnly = false }: MeetingPurposeSelectorProps) {
   const [value, setValue] = useState<MeetingPurposeSetting>({});
   const [customDraft, setCustomDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     api.rooms.getMeetingPurpose(roomId).then((v) => {
@@ -53,27 +54,55 @@ export function MeetingPurposeSelector({ roomId, readOnly = false }: MeetingPurp
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <Target className="h-4 w-4 text-primary" /> 모임 주목적
-      </p>
-      <p className="mt-1 text-xs text-muted">이번 모임의 분위기·기대치를 멤버와 맞춰 보세요.</p>
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 text-left"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Target className="h-4 w-4 text-primary" /> 모임 주목적
+          </p>
+          {!open && (
+            <p className="mt-1 text-sm text-muted">
+              {label ? (
+                <>
+                  현재: <strong className="text-primary">{label}</strong>
+                </>
+              ) : (
+                "탭해서 설정"
+              )}
+            </p>
+          )}
+        </div>
+        {open ? (
+          <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+        ) : (
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+        )}
+      </button>
 
-      {label && (
-        <p className="mt-3 text-sm">
-          현재: <strong className="text-primary">{label}</strong>
-        </p>
+      {open && (
+        <div className="mt-4">
+          <p className="text-xs text-muted">이번 모임의 분위기·기대치를 멤버와 맞춰 보세요.</p>
+          {label && (
+            <p className="mt-3 text-sm">
+              현재: <strong className="text-primary">{label}</strong>
+            </p>
+          )}
+          <MeetingPurposePicker
+            className="mt-3"
+            value={value}
+            customDraft={customDraft}
+            onChange={handleChange}
+            onCustomDraftChange={setCustomDraft}
+            onSaveOther={saveOther}
+            readOnly={readOnly}
+            saving={saving}
+          />
+        </div>
       )}
-
-      <MeetingPurposePicker
-        className="mt-3"
-        value={value}
-        customDraft={customDraft}
-        onChange={handleChange}
-        onCustomDraftChange={setCustomDraft}
-        onSaveOther={saveOther}
-        readOnly={readOnly}
-        saving={saving}
-      />
     </div>
   );
 }

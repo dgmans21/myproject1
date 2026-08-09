@@ -20,10 +20,25 @@ export interface KakaoMapPolyline {
   strokeOpacity?: number;
 }
 
+export interface KakaoMapCircle {
+  id: string;
+  lat: number;
+  lng: number;
+  /** 미터 */
+  radiusMeters: number;
+  strokeColor?: string;
+  strokeWeight?: number;
+  strokeOpacity?: number;
+  fillColor?: string;
+  fillOpacity?: number;
+}
+
 interface KakaoMapProps {
   markers?: KakaoMapMarker[];
   /** 출발지→후보 경로선 (카카오 길찾기 폴리라인). ENABLE_DEPARTURE_ROUTE_LINES 참고 */
   polylines?: KakaoMapPolyline[];
+  /** 반경 원 (예: 중간점 1km) */
+  circles?: KakaoMapCircle[];
   center?: { lat: number; lng: number };
   level?: number;
   height?: number | string;
@@ -44,6 +59,7 @@ interface KakaoMapProps {
 export function KakaoMap({
   markers = [],
   polylines = [],
+  circles = [],
   center,
   level = 5,
   height = 400,
@@ -63,6 +79,7 @@ export function KakaoMap({
   const clustererRef = useRef<unknown>(null);
   const markerInstancesRef = useRef<unknown[]>([]);
   const polylineInstancesRef = useRef<unknown[]>([]);
+  const circleInstancesRef = useRef<unknown[]>([]);
   const initialLevelRef = useRef(level);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -107,6 +124,10 @@ export function KakaoMap({
         (p as { setMap: (v: null) => void }).setMap(null);
       });
       polylineInstancesRef.current = [];
+      circleInstancesRef.current.forEach((c) => {
+        (c as { setMap: (v: null) => void }).setMap(null);
+      });
+      circleInstancesRef.current = [];
       if (clustererRef.current) {
         (clustererRef.current as { clear: () => void }).clear();
         clustererRef.current = null;
@@ -232,6 +253,37 @@ export function KakaoMap({
 
     polylineInstancesRef.current = createdPolylines;
   }, [ready, polylines]);
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.kakao) return;
+
+    const kakao = window.kakao.maps;
+    const map = mapRef.current;
+
+    circleInstancesRef.current.forEach((c) => {
+      (c as { setMap: (v: null) => void }).setMap(null);
+    });
+    circleInstancesRef.current = [];
+
+    if (circles.length === 0) return;
+
+    const created = circles.map((c) => {
+      const circle = new kakao.Circle({
+        center: new kakao.LatLng(c.lat, c.lng),
+        radius: c.radiusMeters,
+        strokeWeight: c.strokeWeight ?? 2,
+        strokeColor: c.strokeColor ?? "#0D9488",
+        strokeOpacity: c.strokeOpacity ?? 0.85,
+        strokeStyle: "solid",
+        fillColor: c.fillColor ?? "#14B8A6",
+        fillOpacity: c.fillOpacity ?? 0.12,
+      });
+      circle.setMap(map);
+      return circle;
+    });
+
+    circleInstancesRef.current = created;
+  }, [ready, circles]);
 
   useEffect(() => {
     if (!ready || !mapRef.current) return;

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { gamesApi, PLAY_MODE_LABELS, LIAR_MODE_LABELS, TOPIC_POLICY_LABELS, type CategoryItem, type LiarMode, type PlayMode, type TopicPolicy } from "@/lib/api/games";
 import { type RoomMember } from "@/lib/api";
 import { isGuestSession } from "@/lib/auth-session";
-import { Gamepad2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Gamepad2 } from "lucide-react";
 import { MafiaRoleGlyph } from "@/components/games/MafiaRoleGlyph";
 import { mafiaRoleTone } from "@/lib/games/mafia-roles";
 
@@ -51,6 +51,7 @@ export function GameLobbyPanel({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   useEffect(() => {
     if (readOnly || isGuestSession()) return;
@@ -167,9 +168,16 @@ export function GameLobbyPanel({
 
   if (readOnly) return null;
 
+  const showSetup = setupOpen || !!activeId;
+
   return (
     <Card>
-      <div className="flex items-start gap-3">
+      <button
+        type="button"
+        className="flex w-full items-start gap-3 text-left"
+        onClick={() => setSetupOpen((v) => !v)}
+        aria-expanded={showSetup}
+      >
         <div className="rounded-xl bg-primary/10 p-2 text-primary">
           <Gamepad2 className="h-5 w-5" />
         </div>
@@ -179,7 +187,12 @@ export function GameLobbyPanel({
             라이어 · 마피아. 사회자 테이블 또는 온라인 파티로 진행합니다.
           </CardDescription>
         </div>
-      </div>
+        {showSetup ? (
+          <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted" />
+        ) : (
+          <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted" />
+        )}
+      </button>
 
       {activeId && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
@@ -190,7 +203,7 @@ export function GameLobbyPanel({
         </div>
       )}
 
-      {isOwner ? (
+      {showSetup && isOwner ? (
         <div className="mt-4 space-y-4">
           <div>
             <p className="mb-2 text-xs font-medium text-muted">게임</p>
@@ -515,9 +528,9 @@ export function GameLobbyPanel({
             <p className="text-xs text-muted">진행 중이면 이어하기를 사용하거나 게임 화면에서 종료하세요.</p>
           )}
         </div>
-      ) : (
+      ) : showSetup ? (
         <p className="mt-3 text-sm text-muted">방장만 게임을 시작할 수 있습니다. 시작되면 이어하기가 표시됩니다.</p>
-      )}
+      ) : null}
     </Card>
   );
 }

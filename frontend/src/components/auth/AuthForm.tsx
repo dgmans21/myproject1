@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { AuthSocialButtons } from "@/components/auth/AuthSocialButtons";
 import { AUTH_AGE_OPTIONS } from "@/lib/auth-ui-constants";
 import { clearGuestSession, setSessionMode } from "@/lib/auth-session";
+import { safeAuthNextPath } from "@/lib/auth-next";
 import { toAuthErrorMessage } from "@/lib/auth-error-messages";
 import { createClient } from "@/lib/supabase/client";
 
@@ -17,6 +18,7 @@ type AuthMode = "login" | "signup";
 export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = safeAuthNextPath(searchParams.get("next"));
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +30,12 @@ export function AuthForm() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (searchParams.get("signup") === "1") {
+      setMode("signup");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const authError = searchParams.get("auth_error");
     if (!authError) return;
     // 네이버 라우트 등에서 이미 한글 메시지를 붙인 경우 그대로 표시
@@ -36,7 +44,11 @@ export function AuthForm() {
         ? authError
         : toAuthErrorMessage({ message: authError }, "oauth")
     );
-    router.replace("/#auth", { scroll: false });
+    const keep = new URLSearchParams();
+    const next = searchParams.get("next");
+    if (next) keep.set("next", next);
+    const q = keep.toString();
+    router.replace(q ? `/?${q}#auth` : "/#auth", { scroll: false });
   }, [searchParams, router]);
 
   const switchMode = (next: AuthMode) => {
@@ -60,26 +72,30 @@ export function AuthForm() {
       const supabase = createClient();
 
       if (mode === "signup") {
+        const meta: Record<string, string> = {
+          display_name: displayName.trim(),
+          age_group: ageGroup,
+        };
+        const residenceTrimmed = residence.trim();
+        if (residenceTrimmed) meta.residence = residenceTrimmed;
+
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
-            data: {
-              display_name: displayName.trim(),
-              age_group: ageGroup,
-              residence: residence.trim(),
-            },
+            data: meta,
           },
         });
         if (error) throw error;
 
         if (data.session) {
-          router.push("/dashboard");
+          router.push(nextPath);
           router.refresh();
           return;
         }
 
         const params = new URLSearchParams({ email: email.trim() });
+        if (nextPath !== "/dashboard") params.set("next", nextPath);
         router.push(`/auth/verify-email?${params.toString()}`);
         return;
       }
@@ -90,7 +106,7 @@ export function AuthForm() {
       });
       if (error) throw error;
 
-      router.push("/dashboard");
+      router.push(nextPath);
       router.refresh();
     } catch (err: unknown) {
       setError(toAuthErrorMessage(err, mode === "login" ? "login" : "signup"));
@@ -107,11 +123,11 @@ export function AuthForm() {
       <p className="mt-1 text-sm text-muted">
         {mode === "login"
           ? "이메일 또는 소셜 계정으로 로그인하세요"
-          : "실명 없이 닉네임·나이대·거주지·이메일을 등록합니다"}
+          : "실명 없이 닉네임·나이대·이메일을 등록합니다. 거주지는 선택입니다"}
       </p>
 
       <div className="mt-6">
-        <AuthSocialButtons disabled={loading} onError={setError} />
+        <AuthSocialButtons disabled={loading} nextPath={nextPath} onError={setError} />
       </div>
 
       <div className="relative my-6">
@@ -152,14 +168,16 @@ export function AuthForm() {
               </select>
             </div>
             <Input
-              label="거주지 (시/구)"
+              label="거주지 (시/구, 선택)"
               id="residence"
               value={residence}
               onChange={(e) => setResidence(e.target.value)}
               placeholder="서울 강남구"
-              required
               autoComplete="address-level2"
             />
+            <p className="text-xs text-muted -mt-2">
+              나중에 마이페이지에서 집·회사 주소를 등록해도 됩니다.
+            </p>
           </>
         )}
 

@@ -28,6 +28,30 @@ declare global {
           setMap: (map: unknown | null) => void;
           setPosition: (pos: unknown) => void;
         };
+        Circle: new (options: {
+          map?: unknown;
+          center: unknown;
+          radius: number;
+          strokeWeight?: number;
+          strokeColor?: string;
+          strokeOpacity?: number;
+          strokeStyle?: string;
+          fillColor?: string;
+          fillOpacity?: number;
+        }) => {
+          setMap: (map: unknown | null) => void;
+          setPosition?: (pos: unknown) => void;
+          setRadius?: (r: number) => void;
+        };
+        Polyline: new (options: {
+          path: unknown[];
+          strokeWeight?: number;
+          strokeColor?: string;
+          strokeOpacity?: number;
+          strokeStyle?: string;
+        }) => {
+          setMap: (map: unknown | null) => void;
+        };
         MarkerClusterer: new (options: {
           map: unknown;
           averageCenter?: boolean;

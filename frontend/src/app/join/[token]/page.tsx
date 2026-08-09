@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
@@ -9,27 +9,39 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { api, InviteTokenPreview } from "@/lib/api";
 import { isGuestSession } from "@/lib/auth-session";
+import { useAuthSession } from "@/lib/use-auth-session";
 import { Eye, Users } from "lucide-react";
 
 export default function JoinByInvitePage() {
   const router = useRouter();
-  const { token } = useParams<{ token: string }>();
+  const { token: rawToken } = useParams<{ token: string }>();
+  const token = useMemo(() => {
+    const value = Array.isArray(rawToken) ? rawToken[0] : rawToken;
+    return (value || "").trim();
+  }, [rawToken]);
+  const { isLoading: authLoading, isLoggedIn, isGuest } = useAuthSession();
   const [preview, setPreview] = useState<InviteTokenPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
-  const guest = isGuestSession();
+  const guest = isGuest || isGuestSession() || (!authLoading && !isLoggedIn);
 
   useEffect(() => {
     if (!token) return;
+    setError(null);
+    setPreview(null);
     api.rooms
       .previewInviteToken(token)
       .then(setPreview)
       .catch((e) => setError(e instanceof Error ? e.message : "링크를 확인할 수 없습니다"));
   }, [token]);
 
+  const loginHref = token
+    ? `/?signup=1&next=${encodeURIComponent(`/join/${token}`)}`
+    : "/?signup=1";
+
   const handleJoin = async () => {
-    if (guest) {
+    if (guest || !isLoggedIn) {
       setGuestPrompt(true);
       return;
     }
@@ -90,7 +102,7 @@ export default function JoinByInvitePage() {
                   </Button>
                 </div>
               ) : (
-                <Button className="w-full" disabled={joining} onClick={handleJoin}>
+                <Button className="w-full" disabled={joining || authLoading} onClick={handleJoin}>
                   {joining ? "입장 중…" : "방 참여하기"}
                 </Button>
               )}
@@ -107,6 +119,8 @@ export default function JoinByInvitePage() {
         open={guestPrompt}
         action="room_manage"
         onClose={() => setGuestPrompt(false)}
+        nextPath={token ? `/join/${token}` : undefined}
+        loginHref={loginHref}
       />
     </div>
   );

@@ -1545,7 +1545,9 @@ const mockApi = {
   appointments: {
     listByRoom: async (roomId: string) => {
       await delay();
-      return mockAppointments.filter((a) => a.room_id === roomId);
+      return mockAppointments
+        .filter((a) => a.room_id === roomId)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
     create: async (data: AppointmentCreate) => {
       await delay();
@@ -1567,6 +1569,17 @@ const mockApi = {
       const apt = mockAppointments.find((a) => a.id === id);
       if (!apt) throw new Error("약속을 찾을 수 없습니다");
       return { ...apt };
+    },
+    delete: async (id: string) => {
+      await delay();
+      const apt = mockAppointments.find((a) => a.id === id);
+      if (!apt) throw new Error("약속을 찾을 수 없습니다");
+      assertRoomOwner(apt.room_id);
+      mockAppointments = mockAppointments.filter((a) => a.id !== id);
+      delete mockBriefingComments[id];
+      delete mockDepartureStatus[id];
+      delete mockMeetingMemos[id];
+      return { ok: true };
     },
     submitDateVote: async (_id: string, _data: DateVote) => { await delay(); return { ok: true }; },
     dateSummary: async (_id: string) => { await delay(); return MOCK_DATE_SUMMARY as VoteSummary[]; },

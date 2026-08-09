@@ -228,6 +228,7 @@ type MockApi = {
     listByRoom: (roomId: string) => Promise<Appointment[]>;
     create: (data: AppointmentCreate) => Promise<Appointment>;
     get: (id: string) => Promise<Appointment>;
+    delete: (id: string) => Promise<{ ok: boolean }>;
     submitDateVote: (id: string, data: DateVote) => Promise<{ ok: boolean }>;
     dateSummary: (id: string) => Promise<VoteSummary[]>;
     advanceToTimeVote: (id: string) => Promise<{ status: string }>;
@@ -574,28 +575,37 @@ export function applyHybridOverrides<T extends MockApi>(mock: T): T {
         );
       },
       getInviteLink: async (roomId: string) => {
-        if (!(await useHttp())) return mock.rooms.getInviteLink(roomId);
+        // hybrid에서 mock 폴백 금지 — mock 토큰을 공유하면 실 API에서 항상 실패함
+        if (getApiMode() === "mock") return mock.rooms.getInviteLink(roomId);
+        if (!(await useHttp())) throw new Error("로그인이 필요합니다");
         const raw = await apiFetch<InviteLinkInfo>(`/rooms/${roomId}/invite-link`);
         return { ...raw, room_id: String(raw.room_id) };
       },
       regenerateInviteLink: async (roomId: string) => {
-        if (!(await useHttp())) return mock.rooms.regenerateInviteLink(roomId);
+        if (getApiMode() === "mock") return mock.rooms.regenerateInviteLink(roomId);
+        if (!(await useHttp())) throw new Error("로그인이 필요합니다");
         const raw = await apiFetch<InviteLinkInfo>(`/rooms/${roomId}/invite-link/regenerate`, {
           method: "POST",
         });
         return { ...raw, room_id: String(raw.room_id) };
       },
       previewInviteToken: async (token: string) => {
-        if (getApiMode() === "mock") return mock.rooms.previewInviteToken(token);
+        const trimmed = token.trim();
+        if (!trimmed) throw new Error("유효하지 않은 초대 링크입니다");
+        if (getApiMode() === "mock") return mock.rooms.previewInviteToken(trimmed);
         const raw = await apiFetchPublic<InviteTokenPreview>(
-          `/rooms/invite-links/${encodeURIComponent(token)}/preview`
+          `/rooms/invite-links/${encodeURIComponent(trimmed)}/preview`
         );
         return { ...raw, room_id: String(raw.room_id) };
       },
       joinByInviteToken: async (token: string) => {
-        if (!(await useHttp())) return mock.rooms.joinByInviteToken(token);
+        const trimmed = token.trim();
+        if (!trimmed) throw new Error("유효하지 않은 초대 링크입니다");
+        // hybrid에서 mock 폴백 금지 — 비로그인 시 mock이「유효하지 않거나 만료」오탐을 냄
+        if (getApiMode() === "mock") return mock.rooms.joinByInviteToken(trimmed);
+        if (!(await useHttp())) throw new Error("로그인이 필요합니다");
         const room = mapRoom(
-          await apiFetch<Room>(`/rooms/invite-links/${encodeURIComponent(token)}/join`, {
+          await apiFetch<Room>(`/rooms/invite-links/${encodeURIComponent(trimmed)}/join`, {
             method: "POST",
           })
         );
@@ -878,6 +888,10 @@ export function applyHybridOverrides<T extends MockApi>(mock: T): T {
       get: async (id: string) => {
         if (!(await useHttp())) return mock.appointments.get(id);
         return mapAppointment(await apiFetch<Appointment>(`/appointments/${id}`));
+      },
+      delete: async (id: string) => {
+        if (!(await useHttp())) return mock.appointments.delete(id);
+        return apiFetch<{ ok: boolean }>(`/appointments/${id}`, { method: "DELETE" });
       },
       submitDateVote: async (id: string, data: DateVote) => {
         if (!(await useHttp())) return mock.appointments.submitDateVote(id, data);

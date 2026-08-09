@@ -11,10 +11,20 @@ interface GuestPromptModalProps {
   open: boolean;
   action: WriteAction;
   onClose: () => void;
+  /** 로그인 후 돌아갈 경로 (예: /join/…) */
+  nextPath?: string;
+  /** 지정 시 nextPath보다 우선 */
+  loginHref?: string;
 }
 
 /** 비회원 → 회원 전환 유도 (강제 가입 대신 자연스러운 안내) */
-export function GuestPromptModal({ open, action, onClose }: GuestPromptModalProps) {
+export function GuestPromptModal({
+  open,
+  action,
+  onClose,
+  nextPath,
+  loginHref,
+}: GuestPromptModalProps) {
   const router = useRouter();
 
   if (!open) return null;
@@ -24,6 +34,14 @@ export function GuestPromptModal({ open, action, onClose }: GuestPromptModalProp
   const goLogin = () => {
     clearGuestSession();
     onClose();
+    if (loginHref) {
+      router.push(loginHref);
+      return;
+    }
+    if (nextPath) {
+      router.push(`/?signup=1&next=${encodeURIComponent(nextPath)}`);
+      return;
+    }
     router.push("/?signup=1");
   };
 

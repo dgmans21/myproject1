@@ -31,7 +31,7 @@ from app.services.briefing import (
     record_confirm_travel_logs,
     set_departure_status,
 )
-from app.routers.rooms import _ensure_member
+from app.routers.rooms import _ensure_member, _ensure_owner
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -252,6 +252,16 @@ async def get_appointment(appointment_id: UUID, user_id: str = Depends(get_curre
     apt = _get_appointment(sb, str(appointment_id))
     _ensure_member(sb, apt["room_id"], user_id)
     return AppointmentResponse(**apt)
+
+
+@router.delete("/{appointment_id}", status_code=200)
+async def delete_appointment(appointment_id: UUID, user_id: str = Depends(get_current_user_id)):
+    """방장만 약속 삭제 (관련 투표·댓글 등은 FK CASCADE)."""
+    sb = get_supabase()
+    apt = _get_appointment(sb, str(appointment_id))
+    _ensure_owner(sb, apt["room_id"], user_id)
+    sb.table("appointments").delete().eq("id", str(appointment_id)).execute()
+    return {"ok": True}
 
 
 @router.post("/{appointment_id}/date-votes", status_code=201)

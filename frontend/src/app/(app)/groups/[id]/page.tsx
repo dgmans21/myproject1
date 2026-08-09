@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Textarea } from "@/components/ui/Input";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { MbtiBadge } from "@/components/MbtiBadge";
 import { ProfileDecorBadges, MEMBER_DECOR_DISPLAY_LIMIT } from "@/components/ProfileDecorBadges";
@@ -20,14 +22,20 @@ import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { MeetingPurposeSelector } from "@/components/MeetingPurposeSelector";
 import { TeamScheduleRoomPanel } from "@/components/TeamScheduleRoomPanel";
 import { GameLobbyPanel } from "@/components/games/GameLobbyPanel";
+import { MeetingMidpointPicker } from "@/components/MeetingMidpointPicker";
 import { api, Appointment, RoomMember, ROOM_TYPE_LABELS, STATUS_LABELS } from "@/lib/api";
 import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { isGuestSession } from "@/lib/auth-session";
+import { canManageRoom } from "@/lib/permissions";
 import { scrollFormIntoView } from "@/lib/mobile-form-scroll";
 import { useRoomStore } from "@/stores/room-store";
-import { Plus, Calendar, ArrowLeft, Crown } from "lucide-react";
+import { Plus, Calendar, ArrowLeft, Crown, Users, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+function sortAppointmentsNewestFirst(list: Appointment[]): Appointment[] {
+  return [...list].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -40,7 +48,10 @@ export default function GroupDetailPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const createFormRef = useRef<HTMLDivElement>(null);
+  const appointmentsRef = useRef<HTMLDivElement>(null);
 
   const reloadMembers = () => {
     if (!id) return;
@@ -51,7 +62,10 @@ export default function GroupDetailPage() {
     if (!id) return;
     fetchRoom(id).catch(() => {});
     fetchRoomHeatmap(id).catch(() => {});
-    api.appointments.listByRoom(id).then(setAppointments).catch(() => {});
+    api.appointments
+      .listByRoom(id)
+      .then((list) => setAppointments(sortAppointmentsNewestFirst(list)))
+      .catch(() => {});
     reloadMembers();
   }, [id, fetchRoom, fetchRoomHeatmap]);
 
@@ -64,6 +78,16 @@ export default function GroupDetailPage() {
     date: d.activity_on,
     count: d.event_count,
   }));
+
+  const sortedAppointments = useMemo(
+    () => sortAppointmentsNewestFirst(appointments),
+    [appointments]
+  );
+
+  const isTeamScheduleRoom = room?.room_type === "TEAM_SCHEDULE";
+  const readOnly = isGuestSession();
+  const isOwner = !!members.find((m) => m.is_me && m.role === "OWNER") || Boolean(room?.is_me_owner);
+  const canDeleteAppointments = canManageRoom(isOwner);
 
   const handleCreate = async () => {
     if (isGuestSession()) {
@@ -78,11 +102,14 @@ export default function GroupDetailPage() {
         title,
         description: description || undefined,
       });
-      setAppointments((prev) => [apt, ...prev]);
+      setAppointments((prev) => sortAppointmentsNewestFirst([apt, ...prev]));
       reloadMembers();
       setShowCreate(false);
       setTitle("");
       setDescription("");
+      requestAnimationFrame(() => {
+        appointmentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (err) {
       alert(err instanceof Error ? err.message : "약속 생성 실패");
     } finally {
@@ -90,8 +117,19 @@ export default function GroupDetailPage() {
     }
   };
 
-  const isTeamScheduleRoom = room?.room_type === "TEAM_SCHEDULE";
-  const readOnly = isGuestSession();
+  const handleDeleteAppointment = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.appointments.delete(deleteTarget.id);
+      setAppointments((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "약속 삭제 실패");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
@@ -169,6 +207,7 @@ export default function GroupDetailPage() {
                   placeholder="팀 회식"
                 />
                 <Textarea label="설명 (선택)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+                <MeetingMidpointPicker />
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button
                     className="w-full sm:w-auto"
@@ -191,23 +230,75 @@ export default function GroupDetailPage() {
           </div>
         )}
 
+        {!isTeamScheduleRoom && <RoomOutputBanner roomId={id!} appointments={sortedAppointments} />}
+
         {!isTeamScheduleRoom && (
-          <div className="mt-6">
-            <MeetingPurposeSelector roomId={id!} readOnly={readOnly} />
-          </div>
+        <div ref={appointmentsRef} className="mt-8 scroll-mt-24">
+          <CollapsibleSection
+            defaultOpen
+            title={
+              <span className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" /> 약속 목록
+              </span>
+            }
+            summary={
+              sortedAppointments.length === 0
+                ? "아직 약속 없음"
+                : `${sortedAppointments.length}개 · 최신: ${sortedAppointments[0].title}`
+            }
+          >
+            {sortedAppointments.length === 0 ? (
+              <div className="py-8 text-center">
+                <Calendar className="mx-auto h-10 w-10 text-muted/40" />
+                <p className="mt-3 text-muted">아직 약속이 없습니다</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {sortedAppointments.map((apt) => (
+                  <div key={apt.id} className="flex items-stretch gap-2">
+                    <Link href={`/groups/${id}/appointments/${apt.id}`} className="min-w-0 flex-1">
+                      <Card hover className="h-full">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <CardTitle>{apt.title}</CardTitle>
+                            {apt.description && <CardDescription>{apt.description}</CardDescription>}
+                          </div>
+                          <Badge
+                            className="w-fit shrink-0"
+                            variant={
+                            apt.status === "confirmed" ? "accent" :
+                            apt.status === "date_voting" ? "primary" :
+                            apt.status === "time_voting" ? "warm" : "default"
+                          }>
+                            {STATUS_LABELS[apt.status]}
+                          </Badge>
+                        </div>
+                        {apt.confirmed_date && (
+                          <p className="mt-2 text-sm text-accent font-medium">
+                            {apt.confirmed_date} {apt.confirmed_time?.slice(0, 5)} 확정
+                          </p>
+                        )}
+                      </Card>
+                    </Link>
+                    {canDeleteAppointments && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 self-center text-muted hover:text-warm"
+                        aria-label={`${apt.title} 삭제`}
+                        onClick={() => setDeleteTarget(apt)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CollapsibleSection>
+        </div>
         )}
-
-        {!isTeamScheduleRoom && !readOnly && (
-          <div className="mt-6">
-            <GameLobbyPanel
-              roomId={id!}
-              members={members}
-              isOwner={!!members.find((m) => m.is_me && m.role === "OWNER")}
-            />
-          </div>
-        )}
-
-        {!isTeamScheduleRoom && <RoomOutputBanner roomId={id!} appointments={appointments} />}
 
         {isTeamScheduleRoom && (
           <div className="mt-6">
@@ -221,94 +312,105 @@ export default function GroupDetailPage() {
           </div>
         )}
 
-        <div className="mt-6">
-          <RoomHostTransferPanel roomId={id!} onUpdated={reloadMembers} />
-        </div>
-
-        <RoomInvitePanel roomId={id!} />
-        <InviteLinkPanel roomId={id!} />
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardTitle className="text-base">방 활동 잔디</CardTitle>
-            <CalendarHeatmap data={heatmapData} className="mt-4" weeks={8} />
-          </Card>
-
-          <Card>
-            <CardTitle className="text-base">멤버</CardTitle>
-            <ul className="mt-4 space-y-3">
-              {members.map((m) => (
-                <li key={m.user_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                  <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
-                    <ProfileNameButton userId={m.user_id} displayName={m.display_name} />
-                    <ProfileDecorBadges
-                      decor={m.profile_decor}
-                      maxItems={MEMBER_DECOR_DISPLAY_LIMIT}
-                    />
-                    {m.is_me && <span className="text-xs text-muted">(나)</span>}
-                    {m.role === "OWNER" && (
-                      <Badge variant="warm" className="text-[10px] px-1.5 py-0">
-                        <Crown className="h-3 w-3 mr-0.5" /> 방장
-                      </Badge>
-                    )}
-                  </span>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {m.mbti_types.map((t) => (
-                      <MbtiBadge key={t} type={t} />
-                    ))}
-                    {m.social_title && (
-                      <SocialPointBadge
-                        className="max-w-full"
-                        title={m.social_title}
-                        badgeColor={m.social_badge_color}
-                      />
-                    )}
-                    <span className="text-muted">{m.social_points}P</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-
         {!isTeamScheduleRoom && (
-        <div className="mt-8 space-y-4">
-          <h2 className="text-lg font-semibold text-foreground">약속 목록</h2>
-          {appointments.length === 0 ? (
-            <div className="text-center py-12">
-              <Calendar className="mx-auto h-10 w-10 text-muted/40" />
-              <p className="mt-3 text-muted">아직 약속이 없습니다</p>
-            </div>
-          ) : (
-            appointments.map((apt) => (
-              <Link key={apt.id} href={`/groups/${id}/appointments/${apt.id}`}>
-                <Card hover>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <CardTitle>{apt.title}</CardTitle>
-                      {apt.description && <CardDescription>{apt.description}</CardDescription>}
-                    </div>
-                    <Badge
-                      className="w-fit shrink-0"
-                      variant={
-                      apt.status === "confirmed" ? "accent" :
-                      apt.status === "date_voting" ? "primary" :
-                      apt.status === "time_voting" ? "warm" : "default"
-                    }>
-                      {STATUS_LABELS[apt.status]}
-                    </Badge>
-                  </div>
-                  {apt.confirmed_date && (
-                    <p className="mt-2 text-sm text-accent font-medium">
-                      {apt.confirmed_date} {apt.confirmed_time?.slice(0, 5)} 확정
-                    </p>
-                  )}
-                </Card>
-              </Link>
-            ))
-          )}
-        </div>
+          <div className="mt-6">
+            <MeetingPurposeSelector roomId={id!} readOnly={readOnly} />
+          </div>
         )}
+
+        <div className="mt-6 space-y-3">
+          <CollapsibleSection
+            title={
+              <span className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" /> 초대 · 방장
+              </span>
+            }
+            summary="친구 초대, 링크 공유, 방장 인도"
+          >
+            <div className="space-y-6">
+              <RoomInvitePanel roomId={id!} embedded />
+              <InviteLinkPanel roomId={id!} embedded />
+              <div className="border-t border-border pt-4">
+                <RoomHostTransferPanel roomId={id!} onUpdated={reloadMembers} embedded />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="멤버 · 활동"
+            summary={`멤버 ${members.length}명 · 방 활동 잔디`}
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div>
+                <p className="mb-3 text-sm font-medium text-foreground">방 활동 잔디</p>
+                <CalendarHeatmap data={heatmapData} weeks={8} />
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-medium text-foreground">멤버</p>
+                <ul className="space-y-3">
+                  {members.map((m) => (
+                    <li key={m.user_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                      <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+                        <ProfileNameButton userId={m.user_id} displayName={m.display_name} />
+                        <ProfileDecorBadges
+                          decor={m.profile_decor}
+                          maxItems={MEMBER_DECOR_DISPLAY_LIMIT}
+                        />
+                        {m.is_me && <span className="text-xs text-muted">(나)</span>}
+                        {m.role === "OWNER" && (
+                          <Badge variant="warm" className="text-[10px] px-1.5 py-0">
+                            <Crown className="h-3 w-3 mr-0.5" /> 방장
+                          </Badge>
+                        )}
+                      </span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {m.mbti_types.map((t) => (
+                          <MbtiBadge key={t} type={t} />
+                        ))}
+                        {m.social_title && (
+                          <SocialPointBadge
+                            className="max-w-full"
+                            title={m.social_title}
+                            badgeColor={m.social_badge_color}
+                          />
+                        )}
+                        <span className="text-muted">{m.social_points}P</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CollapsibleSection>
+        </div>
+
+        {!isTeamScheduleRoom && !readOnly && (
+          <div className="mt-6">
+            <GameLobbyPanel
+              roomId={id!}
+              members={members}
+              isOwner={isOwner}
+            />
+          </div>
+        )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="이 약속을 삭제할까요?"
+        description={
+          deleteTarget
+            ? `「${deleteTarget.title}」약속을 삭제합니다. 투표·댓글 등도 함께 사라지고 되돌릴 수 없습니다.`
+            : ""
+        }
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleDeleteAppointment}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+      />
 
       <GuestPromptModal
         open={guestPrompt}

@@ -20,8 +20,15 @@ PC Wi‑Fi IP가 바뀌면 **스크립트 + 외부 콘솔**을 같이 맞춘다.
 
 | 파일 | 키 |
 |------|-----|
-| `frontend/.env.local` | `DEV_LAN_IP`, `NEXT_PUBLIC_API_URL=http://<IP>:8000` |
-| `backend/.env` | `CORS_ORIGINS` (localhost + 127.0.0.1 + `http://<IP>:3000`) |
+| `frontend/.env.local` | `DEV_LAN_IP`, `NEXT_PUBLIC_API_URL=http://<IP>:8000`, `NEXT_PUBLIC_APP_URL=http://<IP>:3000` (초대 공유) |
+| `backend/.env` | `CORS_ORIGINS` (localhost + 127.0.0.1), `CORS_LAN_PREFIX=<a.b.c>` |
+
+초대 링크는 `window.location`(localhost)이 아니라 **`NEXT_PUBLIC_APP_URL` / LAN** 을 쓴다. 그렇지 않으면 폰에서 초대 URL이 안 열린다.
+
+**DHCP `.100`~`.250`:** 같은 /24 안에서는 IP만 바뀌어도 CORS·Next `allowedDevOrigins`가 대역을 허용한다.  
+- 백엔드: `CORS_LAN_PREFIX` → `http://<prefix>.100:3000` … `.250:3000`  
+- 프론트: `next.config.ts`가 `DEV_LAN_IP`의 /24 에서 `.100`~`.250` 전개  
+- **API URL·콘솔 Redirect**는 여전히 **현재 PC IP**가 맞아야 함 → 스크립트로 `DEV_LAN_IP` / `NEXT_PUBLIC_API_URL` 갱신 후 **재시작**
 
 `frontend/next.config.ts`의 `allowedDevOrigins`는 **`DEV_LAN_IP`를 읽음** → env만 맞추고 **`npm run dev` 재시작**.
 
@@ -39,7 +46,7 @@ cd backend; uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 3. 수동(콘솔) — 스크립트가 못 함
 
-IP·포트까지 **정확히** 추가:
+IP·포트까지 **정확히** 추가 (대역 와일드카드 불가 — 바뀐 IP마다 또는 자주 쓰는 IP들 등록):
 
 | 서비스 | 등록 |
 |--------|------|

@@ -25,6 +25,10 @@ export const useRoomStore = create<RoomStore>((set) => ({
     try {
       const rooms = await api.rooms.list();
       set({ rooms });
+    } catch (err) {
+      // 로그인 후 API 실패 시 이전 게스트 mock 방이 남지 않게 비움
+      set({ rooms: [] });
+      throw err;
     } finally {
       set({ loading: false });
     }

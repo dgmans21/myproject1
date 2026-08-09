@@ -10,10 +10,12 @@ import { UserPlus, Users, Lock } from "lucide-react";
 
 interface RoomInvitePanelProps {
   roomId: string;
+  /** 바깥 CollapsibleSection 안에서 쓸 때 카드 래핑 생략 */
+  embedded?: boolean;
 }
 
 /** 방장: 친구 초대 + 입장 비밀번호 설정 */
-export function RoomInvitePanel({ roomId }: RoomInvitePanelProps) {
+export function RoomInvitePanel({ roomId, embedded = false }: RoomInvitePanelProps) {
   const [hostStatus, setHostStatus] = useState<HostTransferStatus | null>(null);
   const [candidates, setCandidates] = useState<FriendSummary[]>([]);
   const [friendModalOpen, setFriendModalOpen] = useState(false);
@@ -74,52 +76,67 @@ export function RoomInvitePanel({ roomId }: RoomInvitePanelProps) {
 
   if (!hostStatus?.is_me_owner) return null;
 
+  const body = (
+    <>
+      {!embedded && (
+        <>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-primary" /> 멤버 초대
+          </CardTitle>
+          <CardDescription className="mt-1">
+            친구 여러 명을 한 번에 선택해 초대할 수 있습니다.
+          </CardDescription>
+        </>
+      )}
+      {embedded && (
+        <p className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+          <Users className="h-4 w-4 text-primary" /> 멤버 초대
+        </p>
+      )}
+
+      {candidates.length === 0 ? (
+        <p className={embedded ? "text-sm text-muted" : "mt-4 text-sm text-muted"}>
+          초대할 친구가 없습니다.
+        </p>
+      ) : (
+        <div className={embedded ? "flex flex-wrap items-center gap-2" : "mt-4 flex flex-wrap items-center gap-2"}>
+          <Button size="sm" onClick={() => setFriendModalOpen(true)} disabled={submitting}>
+            <UserPlus className="h-3.5 w-3.5" /> 친구 선택해서 초대
+          </Button>
+          <span className="text-xs text-muted">초대 가능 {candidates.length}명</span>
+        </div>
+      )}
+
+      <div className="mt-6 border-t border-border pt-4">
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Lock className="h-4 w-4" /> 입장 비밀번호
+          {hasPassword && (
+            <span className="text-xs font-normal text-accent">설정됨</span>
+          )}
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          초대 없이 입장하려는 사람에게 공유할 수 있습니다.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <Input
+            label="새 비밀번호 (비우고 저장하면 해제)"
+            type="password"
+            value={joinPassword}
+            onChange={(e) => setJoinPassword(e.target.value)}
+            placeholder="4자 이상"
+            className="min-w-[200px] flex-1"
+          />
+          <Button size="sm" variant="secondary" onClick={handleSavePassword} disabled={submitting}>
+            저장
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <>
-      <Card className="mt-6">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Users className="h-4 w-4 text-primary" /> 멤버 초대
-        </CardTitle>
-        <CardDescription className="mt-1">
-          친구 여러 명을 한 번에 선택해 초대할 수 있습니다.
-        </CardDescription>
-
-        {candidates.length === 0 ? (
-          <p className="mt-4 text-sm text-muted">초대할 친구가 없습니다.</p>
-        ) : (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => setFriendModalOpen(true)} disabled={submitting}>
-              <UserPlus className="h-3.5 w-3.5" /> 친구 선택해서 초대
-            </Button>
-            <span className="text-xs text-muted">초대 가능 {candidates.length}명</span>
-          </div>
-        )}
-
-        <div className="mt-6 border-t border-border pt-4">
-          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Lock className="h-4 w-4" /> 입장 비밀번호
-            {hasPassword && (
-              <span className="text-xs font-normal text-accent">설정됨</span>
-            )}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            초대 없이 입장하려는 사람에게 공유할 수 있습니다.
-          </p>
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <Input
-              label="새 비밀번호 (비우고 저장하면 해제)"
-              type="password"
-              value={joinPassword}
-              onChange={(e) => setJoinPassword(e.target.value)}
-              placeholder="4자 이상"
-              className="min-w-[200px] flex-1"
-            />
-            <Button size="sm" variant="secondary" onClick={handleSavePassword} disabled={submitting}>
-              저장
-            </Button>
-          </div>
-        </div>
-      </Card>
+      {embedded ? body : <Card className="mt-6">{body}</Card>}
 
       <FriendInviteModal
         open={friendModalOpen}

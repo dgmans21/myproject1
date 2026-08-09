@@ -13,6 +13,7 @@ import { GuestPromptModal } from "@/components/GuestPromptModal";
 import { api, ROOM_TYPE_LABELS } from "@/lib/api";
 import { meetingPurposeLabel } from "@/lib/meeting-purpose";
 import { isGuestSession } from "@/lib/auth-session";
+import { useAuthSession } from "@/lib/use-auth-session";
 import { scrollFormIntoView } from "@/lib/mobile-form-scroll";
 import { useRoomStore } from "@/stores/room-store";
 import { Plus, Users } from "lucide-react";
@@ -21,14 +22,16 @@ import Link from "next/link";
 export default function GroupsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isLoading: authLoading, isLoggedIn, isGuest } = useAuthSession();
   const { rooms, loading, fetchRooms, updateRoom, removeRoom } = useRoomStore();
   const [showCreate, setShowCreate] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
   const createFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     fetchRooms().catch(() => {});
-  }, [fetchRooms]);
+  }, [authLoading, isLoggedIn, isGuest, fetchRooms]);
 
   useEffect(() => {
     if (searchParams.get("create") !== "1") return;
